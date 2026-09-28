@@ -1438,8 +1438,9 @@ const ORIGINS = [
   { id: 10, name: 'Optimism', rpc: 'https://mainnet.optimism.io', explorer: 'https://optimistic.etherscan.io', add: { chainId: '0xa', chainName: 'OP Mainnet', nativeCurrency: ETH_META, rpcUrls: ['https://mainnet.optimism.io'], blockExplorerUrls: ['https://optimistic.etherscan.io'] } },
   { id: 1, name: 'Ethereum', rpc: 'https://ethereum-rpc.publicnode.com', explorer: 'https://etherscan.io', add: null },
 ];
-const TOPUP_USD = [10, 25, 50, 100];
-state.bridge = { origin: 8453, picked: false, usd: 25, quote: null, balances: {}, balFor: null, target: 'self', host: '#bridgeBody', token: 0, busy: false };
+const TOPUP_USD = [2, 5, 10, 25];
+const TOPUP_MIN = 1, TOPUP_MAX = 500;
+state.bridge = { origin: 8453, picked: false, usd: 5, custom: false, quote: null, balances: {}, balFor: null, target: 'self', host: '#bridgeBody', token: 0, busy: false, destBal: null };
 
 async function rpcBalance(rpc, address) {
   try {
@@ -1453,10 +1454,14 @@ const bridgeRecipient = () => state.bridge.target === 'agent' ? state.agent && s
 // target 'self' tops up the connected wallet; 'agent' funds the BANDIT agent wallet. inline mounts it in the trade sheet.
 function openTopUp(target = 'self', inline = false) {
   const b = state.bridge;
-  Object.assign(b, { target, quote: null, busy: false, host: inline ? '#lowBal' : '#bridgeBody' });
+  Object.assign(b, { target, quote: null, busy: false, destBal: null, host: inline ? '#lowBal' : '#bridgeBody' });
   if (!inline) openLayer('#bridgeSheet');
   renderBridge();
 }
+// What the ETH is for, so nobody wonders about USDC or other tokens.
+const topupWhy = target => target === 'agent'
+  ? 'The agent pays in ETH on Robinhood Chain and needs nothing else: it buys each YT straight from ETH, at most $25 a trade and $100 a day, plus about a cent of gas per trade. No USDC needed. $5 to $10 is enough for a test trade.'
+  : 'Trades on Robinhood Chain use ETH and nothing else: the YT is bought straight from ETH, plus about a cent of gas. No USDC needed. $5 covers a small test trade.';
 function renderBridge() {
   const b = state.bridge, host = $(b.host), w = state.wallet;
   if (!host) return;
@@ -1470,15 +1475,16 @@ function renderBridge() {
   }
   const to = bridgeRecipient();
   host.innerHTML = `<div class="bridge">${head}
+    <div class="br-note">${esc(topupWhy(b.target))}</div>
     <div class="fld"><span class="fl">From</span><div class="pills br-origins">${ORIGINS.map(o => `<button type="button" data-borigin="${o.id}" class="${b.origin === o.id ? 'on' : ''}">${o.name}<small data-bbal="${o.id}">${b.balFor === w.address && b.balances[o.id] != null ? `${b.balances[o.id].toFixed(4)} ETH` : '…'}</small></button>`).join('')}</div></div>
-    <div class="fld"><span class="fl">How much</span><div class="pills">${TOPUP_USD.map(u => `<button type="button" data-busd="${u}" class="${b.usd === u ? 'on' : ''}">$${u}</button>`).join('')}</div></div>
-    <div class="br-to">Lands in <b>${b.target === 'agent' ? 'the BANDIT agent wallet' : 'your wallet'}</b> on Robinhood Chain <span class="mono">${esc(shortAddr(to))}</span></div>
+    <div class="fld"><span class="fl">How much <em>minimum $${TOPUP_MIN}</em></span><div class="pills br-amts">${TOPUP_USD.map(u => `<button type="button" data-busd="${u}" class="${!b.custom && b.usd === u ? 'on' : ''}">$${u}</button>`).join('')}<label class="br-custom ${b.custom ? 'on' : ''}"><span>$</span><input id="brAmt" inputmode="decimal" autocomplete="off" placeholder="Other" aria-label="Custom amount in dollars" value="${b.custom ? esc(b.usd) : ''}"></label></div></div>
     <div class="br-quote" id="brQuote"><span class="faint">Getting a live quote from Relay…</span></div>
     <button class="btn primary" id="brGo" disabled>Getting a quote…</button>
     <div class="br-status" id="brStatus"></div>
-    <p class="help">BANDIT never holds your funds. You sign one transfer in your wallet and Relay delivers the ETH, usually within seconds.</p>
+    <p class="help">BANDIT never holds your funds. You sign one transfer in your wallet and Relay delivers the ETH to <b>${b.target === 'agent' ? 'the BANDIT agent wallet' : 'your wallet'}</b> (<span class="mono">${esc(shortAddr(to))}</span>) on Robinhood Chain, usually within seconds.</p>
   </div>`;
   loadBridgeBalances();
+  rpcBalance(WALLET_CHAIN.rpcUrls[0], to).then(v => { b.destBal = v; if (b.quote) quoteBridge(); });
   quoteBridge();
 }
 async function loadBridgeBalances() {
@@ -1492,9 +1498,10 @@ async function loadBridgeBalances() {
   }));
   // Start from the chain with the most ETH, unless the user already picked one.
   const best = ORIGINS.filter(o => b.balances[o.id] > 0).sort((x, y) => b.balances[y.id] - b.balances[x.id])[0];
-  if (!b.picked && best && best.id !== b.origin) { b.origin = best.id; $$('[data-borigin]').forEach(x => x.classList.toggle('on', Number(x.dataset.borigin) === b.origin)); quoteBridge(); }
-  else quoteBridge();
+  if (!b.picked && best && best.id !== b.origin) { b.origin = best.id; $$('[data-borigin]').forEach(x => x.classList.toggle('on', Number(x.dataset.borigin) === b.origin)); }
+  quoteBridge();
 }
+const feeText = n => !n ? 'n/a' : n < 0.01 ? 'under $0.01' : `${n.toFixed(2)}`;
 let bridgeTimer = null;
 function quoteBridge() {
   clearTimeout(bridgeTimer);
@@ -1505,6 +1512,11 @@ function quoteBridge() {
     const origin = ORIGINS.find(o => o.id === b.origin);
     const ethUsd = state.data && state.data.ethUsd;
     if (!ethUsd) { out.innerHTML = '<span class="faint">Waiting for the live ETH price…</span>'; return; }
+    if (!(b.usd >= TOPUP_MIN && b.usd <= TOPUP_MAX)) {
+      b.quote = null; go.disabled = true; go.textContent = 'Pick an amount';
+      out.innerHTML = `<span class="warn">Enter an amount from $${TOPUP_MIN} to $${TOPUP_MAX}.</span>`;
+      return;
+    }
     const wei = BigInt(Math.round((b.usd / ethUsd) * 1e6)) * 10n ** 12n;
     go.disabled = true; go.textContent = 'Getting a quote…';
     try {
@@ -1513,13 +1525,22 @@ function quoteBridge() {
       if (token !== b.token) return;
       if (!r.ok || !Array.isArray(q.steps)) throw new Error(q.message || `Relay answered HTTP ${r.status}`);
       b.quote = { ...q, wei, origin: origin.id };
-      const d = q.details || {}, got = d.currencyOut || {};
-      const fees = Number((q.fees && q.fees.gas && q.fees.gas.amountUsd) || 0) + Number((q.fees && q.fees.relayer && q.fees.relayer.amountUsd) || 0);
+      const d = q.details || {}, got = d.currencyOut || {}, f = q.fees || {};
+      const gasUsd = Number((f.gas && f.gas.amountUsd) || 0), relayUsd = Number((f.relayer && f.relayer.amountUsd) || 0);
+      const sendEth = Number(wei) / 1e18, gotEth = Number(got.amountFormatted || 0);
       const have = b.balFor === w.address ? b.balances[origin.id] : null;
-      const short = have != null && have < Number(wei) / 1e18;
-      out.innerHTML = `You send <b>${(Number(wei) / 1e18).toFixed(5)} ETH</b> on ${origin.name} and get about <b>${Number(got.amountFormatted || 0).toFixed(5)} ETH</b>${got.amountUsd ? ` (${usd(Number(got.amountUsd))})` : ''} on Robinhood Chain. Fees about ${fees ? usd(fees) : 'n/a'}${d.timeEstimate != null ? `, arrives in about ${Math.max(5, Math.round(d.timeEstimate))} seconds` : ''}.${short ? `<div class="warn">You have ${have.toFixed(5)} ETH on ${origin.name}, which is not enough. Pick another chain or a smaller amount.</div>` : ''}`;
+      const short = have != null && have < sendEth;
+      const row = (k, v, cls = '') => `<div class="br-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
+      out.innerHTML = `<div class="br-receipt">
+          ${row('You send', `${sendEth.toFixed(5)} ETH on ${origin.name} <em>${usd(b.usd)}</em>`)}
+          ${row(`Network fee on ${origin.name}`, feeText(gasUsd))}
+          ${row('Relay fee', feeText(relayUsd))}
+          ${row('Arrives on Robinhood Chain', `${gotEth.toFixed(5)} ETH <em>${got.amountUsd ? usd(Number(got.amountUsd)) : ''}</em>`, 'total')}
+          ${row('Arrives in', `about ${Math.max(5, Math.round(d.timeEstimate || 5))} seconds`)}
+          ${b.destBal != null ? row(`${b.target === 'agent' ? 'Agent' : 'Your'} balance there`, `${b.destBal.toFixed(5)} ETH <span class="arrow">→</span> about ${(b.destBal + gotEth).toFixed(5)} ETH`) : ''}
+        </div>${short ? `<div class="warn">You have ${have.toFixed(5)} ETH on ${origin.name}, which is not enough. Pick another chain or a smaller amount.</div>` : ''}`;
       go.disabled = short;
-      go.innerHTML = `Top up $${b.usd} from ${origin.name} <span class="arr">→</span>`;
+      go.innerHTML = `Top up ${usd(b.usd)} from ${origin.name} <span class="arr">→</span>`;
     } catch (e) {
       if (token !== b.token) return;
       b.quote = null;
@@ -1965,7 +1986,7 @@ document.addEventListener('click', e => {
   if ((el = q('[data-gfilter]'))) { state.gradeFilter = el.dataset.gfilter; renderChains(); renderBoard(); return; }
   if ((el = q('[data-topup]'))) return openTopUp(el.dataset.topup, Boolean(el.dataset.inline));
   if ((el = q('[data-borigin]'))) { state.bridge.origin = Number(el.dataset.borigin); state.bridge.picked = true; $$('[data-borigin]').forEach(x => x.classList.toggle('on', x === el)); return quoteBridge(); }
-  if ((el = q('[data-busd]'))) { state.bridge.usd = Number(el.dataset.busd); $$('[data-busd]').forEach(x => x.classList.toggle('on', x === el)); return quoteBridge(); }
+  if ((el = q('[data-busd]'))) { Object.assign(state.bridge, { usd: Number(el.dataset.busd), custom: false }); $('[data-busd]').forEach(x => x.classList.toggle('on', x === el)); $('.br-custom')?.classList.remove('on'); if ($('#brAmt')) $('#brAmt').value = ''; return quoteBridge(); }
   if (q('#brGo')) return runBridge();
   if ((el = q('[data-chain]'))) { state.chain = el.dataset.chain; renderChains(); renderBoard(); return; }
   if ((el = q('[data-farmchain]'))) { state.farmChain = el.dataset.farmchain; $$('#farmFilters .chip').forEach(c => c.classList.toggle('on', c === el)); renderFarm(); return; }
@@ -1997,6 +2018,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'tMarket') { state.trade.marketId = e.target.value; state.trade.review = null; state.trade.size = num($('#tSize').value) || 10; renderTrade(); }
+});
+document.addEventListener('input', e => {
+  if (e.target.id !== 'brAmt') return;
+  const v = num(e.target.value);
+  Object.assign(state.bridge, { usd: v, custom: e.target.value.trim() !== '' });
+  $$('[data-busd]').forEach(x => x.classList.toggle('on', !state.bridge.custom && Number(x.dataset.busd) === v));
+  $('.br-custom')?.classList.toggle('on', state.bridge.custom);
+  quoteBridge();
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeAll(); closeMenu(); }

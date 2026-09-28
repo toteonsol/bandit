@@ -922,3 +922,19 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opac
 .mc-name .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .band.forming .fnote{display:none}
 @media (max-width:600px){.farm-grid{grid-template-columns:1fr}}
+
+/* top up: amounts, receipt breakdown */
+.br-note{padding:11px 13px;border-radius:12px;background:rgba(200,242,90,.06);border:1px solid rgba(200,242,90,.16);font-size:12.5px;color:var(--text-2);line-height:1.55}
+.br-amts{align-items:center}
+.br-custom{display:inline-flex;align-items:center;gap:2px;height:33px;padding:0 10px;border-radius:99px;border:1px solid var(--line-strong);color:var(--text-3);font-family:var(--font-data);font-size:12.5px;transition:.16s}
+.br-custom.on,.br-custom:focus-within{border-color:rgba(200,242,90,.45);background:var(--lime-dim);color:var(--lime)}
+.br-custom input{width:62px;border:none;outline:none;background:transparent;color:var(--text);font:inherit;font-weight:700}
+.br-custom input::placeholder{color:var(--text-3);font-family:var(--font-ui);font-weight:600}
+.br-receipt{display:grid;gap:7px}
+.br-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--text-3)}
+.br-row b{font-family:var(--font-data);font-weight:600;color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+.br-row b em{font-style:normal;color:var(--text-3);font-weight:500;margin-left:4px}
+.br-row .arrow{color:var(--lime);margin:0 3px}
+.br-row.total{padding-top:8px;border-top:1px dashed var(--line-strong)}
+.br-row.total b{color:var(--lime)}
+.br-quote{min-height:0}
