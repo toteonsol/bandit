@@ -96,7 +96,7 @@ function marketCard(m, rank) {
     ${rank ? `<span class="rank-no">${rank}</span>` : ''}
     <div class="top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>
       <div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(p.project || m.protocol || 'Pendle')} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d left</div></div></div>
-    <div class="badges"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span><span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>${p.multiplier ? `<span class="badge plain none">${esc(p.program)} ${p.multiplier}x</span>` : ''}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
+    <div class="badges"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span><span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>${p.program && p.status === 'confirmed points' ? `<span class="badge plain none">${esc(p.program)}${p.multiplier ? ` ${p.multiplier}x` : ''}</span>` : ''}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
     <div class="big">${big}<span class="k">per 1,000 pts</span></div>
     <div class="kpis"><div class="kpi"><b>${p.ptsPerDay100 != null ? compact(p.ptsPerDay100) : 'n/a'}</b><span>pts/day per $100</span></div><div class="kpi"><b>${decay}</b><span>decays by maturity</span></div><div class="kpi"><b>${m.leverage ? Math.round(m.leverage) + 'x' : 'n/a'}</b><span>YT leverage</span></div></div>
     <div>${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div></div>

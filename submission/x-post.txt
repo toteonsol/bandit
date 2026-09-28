@@ -1,7 +1,7 @@
 SINGLE POST (under 280 characters on X, links count as 23 each)
-Attach: screenshot-1-board.png and screenshot-3-ask-bandit.png
+Attach: screenshot-1-farm.png and screenshot-3-agent-live.png
 
-BANDIT: every live Pendle market placed inside its own 90-day yield band. See if a rate sits near its floor or its top, then tell BANDIT your size and risk and SERV Reasoning explains the trade-offs.
+BANDIT: the first agent that prices airdrop points. It trades YT on tokenized stocks on Robinhood Chain, shows what each point costs, and farms the cheapest while you sleep, only if SERV Reasoning agrees.
 
 Live: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
@@ -12,22 +12,24 @@ Code: https://github.com/toteonsol/bandit
 THREAD VERSION (3 posts)
 
 1/3
-Meet BANDIT, a yield-band agent for Pendle PT and YT markets, built on @openservai SERV Reasoning.
+Meet BANDIT, an autonomous points agent on Robinhood Chain, built on @openservai SERV Reasoning.
 
-It places every live Pendle market on Ethereum and Arbitrum inside its own 90-day implied APY band, so you can see if a rate sits near its floor, mid band, or near its top.
-[attach screenshot-1-board.png]
+People buy Pendle YTs to farm airdrop points. Nobody tells them what a point costs. BANDIT does: YT leverage, points multiplier and decay, turned into cost per 1,000 points.
+[attach screenshot-1-farm.png]
 
 2/3
-How it reads a band: live implied APY from Pendle's API, a 90-day min to max band, today's percentile inside it (P12 means near floor), days to maturity, and the 7-day change.
+Set a rule, like "enter YT-PFE when its band is below P30", or turn on Farm mode.
 
-Markets under 14 days old get labelled "band forming" instead of a made-up percentile.
-[attach screenshot-2-band-board.png]
+Every 10 minutes the agent checks. On a trigger, SERV Reasoning must confirm with a written reason before it trades on Robinhood Chain. Caps are hard-coded: $25 a trade, $100 a day.
+[attach screenshot-3-agent-live.png]
 
 3/3
-Ask BANDIT: enter a size and a risk level. SERV Reasoning reads the band data and returns a ranked read of the best fits, why each fits, and the main risks.
+Agent Live shows every run, every trade links to the explorer, and Telegram says why it acted or held off.
+
+No wallet needed to browse. Bring Rabby to trade yourself.
 
 Data and reasoning only, not financial advice.
 
 Live: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
-[attach screenshot-3-ask-bandit.png]
+[attach screenshot-2-farm-board.png]

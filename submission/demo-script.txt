@@ -1,29 +1,40 @@
-BANDIT DEMO SCRIPT (about 80 seconds)
-Record at 1440 x 900 on https://bandit-bands.vercel.app. Warm it up first: load the page once and run one Ask BANDIT query before recording, so the take has no cold start.
+BANDIT DEMO SCRIPT (about 85 seconds)
+Record at 1440 x 900 on https://bandit-bands.vercel.app, with Telegram open on your phone or in a second window.
 
-0:00 to 0:08  OPEN ON THE BOARD (top of page)
-Show: the BANDIT header, the LIVE pill, and the hero line.
-Say: "This is BANDIT. It takes every live Pendle market on Ethereum and Arbitrum and places today's implied APY inside that market's own 90-day band."
+BEFORE YOU RECORD
+1. Agent wallet funded with a little ETH on Robinhood Chain (the Agent tab shows the balance).
+2. Telegram: open the bot from "Follow on Telegram" on the Agent tab and press Start.
+3. Owner mode unlocked in the browser (Agent tab, Owner mode, your OWNER_KEY).
+4. AGENT_LIVE=true set in Vercel and redeployed. Keep the trade small: $10 on a market whose price impact is under 5% (PFE or SHROOM, not NVDA).
+5. Warm up once: open Ask BANDIT and ask any question, so SERV's first-call setup is out of the way.
 
-0:08 to 0:22  SIGNAL CARDS
-Show: hover the three cards: nearest the floor, nearest the top, band forming.
-Say: "Up top, BANDIT pulls out the extremes. This one sits near the floor of its 90-day band. This one sits near the top: its fixed rate is near the high end of its range. And this market is too new, so BANDIT labels it band forming instead of faking a percentile."
+0:00 to 0:10  THE HOOK (Farm tab, top)
+Show: the hero with BANDIT asleep in the hammock, and the "cheapest 1K pts" stat.
+Say: "People buy Pendle YTs to farm airdrop points, but nobody tells them what a point costs. BANDIT does, and its agent farms on Robinhood Chain while you sleep."
 
-0:22 to 0:38  THE BAND BOARD
-Show: scroll to the board. Point at one band gauge, its min and max labels, the P number, then the 7-day change.
-Say: "Each row is a band gauge: lowest to highest daily implied APY over 90 days, with a dot for today. P13 means only 13 percent of days were lower. You also get underlying APY, liquidity, and the 7-day move."
-Show: click the Arbitrum chip, then All chains again. Click the Liquidity header to sort.
-Say: "Filter by chain, sort by anything. All of it is live from Pendle's API."
+0:10 to 0:24  PRICING POINTS (scroll the Farm board)
+Show: the Robinhood Chain cards (tokenized NVDA, PFE, SGOV) with "speculative airdrop, rate unknown", then the priced cards with cost per 1,000 points, points per day, decay and the band gauge.
+Say: "Every YT gets one number: cost per 1,000 points, from YT leverage, the points multiplier and decay. Robinhood Chain markets have no published rate, so BANDIT says so instead of inventing one. Distorted markets are flagged and never ranked."
 
-0:38 to 0:50  ASK BANDIT
-Show: scroll to Ask BANDIT. Type 25,000 as the size, pick Low risk, and type: "I want a fixed rate on stablecoins for one to three months." Click Ask BANDIT.
-Say: "Now the agent. I tell BANDIT my size and risk level. It sends the top markets' band data to SERV Reasoning as structured JSON."
-Show: the loader, "SERV Reasoning is reading 20 markets".
+0:24 to 0:36  ARM A RULE (Agent tab)
+Show: the rule builder. Band rule, YT-PFE, trigger, action Enter YT, size $10, slippage 3%. Click "Arm this rule". Point at the hard limits card.
+Say: "I arm a rule: enter $10 of YT-PFE when its band crosses my trigger. Caps are written into the code: $25 a trade, $100 a day, 5% max price impact."
 
-0:50 to 1:12  THE REASONING OUTPUT
-Show: the headline, then the ranked cards. Pause on card 1: its band gauge, the band read, why it fits, the trade-offs, the watch tags. Scroll to Main risks.
-Say: "SERV comes back with a ranked read for low risk. Each pick shows where it sits in its band, why it fits my size, and what I give up. Then the main risks: time decay near maturity, thin liquidity, and bands that are still forming."
+0:36 to 0:58  THE AGENT WAKES UP (Agent Live)
+Show: click Run now. Let the animation play: Markets scan, the rule lights up as triggered, the Pendle quote, SERV Reasoning thinking, then SERV's written reason, Robinhood Chain confirmed, Telegram pinged.
+Say: "Normally this runs every 10 minutes. The rule triggers, BANDIT pulls a live Pendle quote, and SERV Reasoning has to confirm with a reason before anything moves. Here is its reason. Confirmed, the trade lands on Robinhood Chain."
 
-1:12 to 1:22  CLOSE
-Show: the meta line "Answered by SERV Reasoning", then the footer.
-Say: "Every answer runs on SERV Reasoning, with no fallback model. Data and reasoning only, not financial advice. BANDIT: yield bands, read by SERV."
+0:58 to 1:08  TELEGRAM
+Show: the Telegram message: the points math, the size and price impact, SERV's reason, and the tx link.
+Say: "Telegram tells me what it did and why, with the points math up front."
+
+1:08 to 1:20  THE RECEIPT (Receipts tab, then the explorer)
+Show: the Receipts timeline entry, click the tx link, and show it confirmed on the Robinhood Chain explorer. Back to the points ledger.
+Say: "Every trade has an onchain receipt, and the ledger tracks estimated points and decay."
+
+1:20 to 1:28  CLOSE
+Show: the Farm tab again, or the Trade with BANDIT sheet with a Rabby connect.
+Say: "No wallet needed to browse or get alerts, bring Rabby to trade yourself, and every decision runs on SERV Reasoning. BANDIT: the agent that farms points while you sleep."
+
+IF SERV HOLDS OFF ON CAMERA
+That is a feature: show the reason in Agent Live and Telegram ("SERV held off: ..."), then run a rule SERV confirms. The receipts page keeps both.

@@ -1,74 +1,102 @@
 # BANDIT
 
-**Pendle yield bands, read by SERV Reasoning.**
+**The agent that farms points while you sleep.**
 
-Live demo: https://bandit-bands.vercel.app
+Live app: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
+Track: Mainnet & MCP (Robinhood Chain), OpenServ SERV Hackathon Edition 01
 
-BANDIT is a yield-band agent for Pendle PT and YT markets. It pulls the live implied APY of every liquid Pendle market on Ethereum and Arbitrum, places today's rate inside that market's own 90-day history, and ranks the markets on a band board. Then you tell it your position size and risk level, and SERV Reasoning reads the band data and explains, in plain language, where each market sits and what the trade-offs are.
+BANDIT is the first agent that prices airdrop points. People buy Pendle YTs to farm points for future airdrops, but nobody tells them what a point actually costs. BANDIT turns YT leverage, points multipliers and time decay into one number, **cost per 1,000 points**. It places every rate in its own 90-day band, then runs an autonomous agent on **Robinhood Chain** that acts on your rules only when **SERV Reasoning** agrees.
 
 Data and reasoning only. Not financial advice.
 
-## What you see
+## What you can do
 
-- **Band board.** Every Pendle market above the liquidity threshold, with its 90-day band (lowest to highest daily implied APY), today's position inside it as a percentile, days to maturity, liquidity, underlying APY, and the 7-day change in implied APY. Filter by chain, sort by any column.
-- **Signal cards.** The market nearest its band floor, the one nearest its band top, and the newest market still forming its band.
-- **Band notes.** Bottom and top decile readings, the biggest 7-day move, and markets close to maturity.
-- **Ask BANDIT.** Enter a position size in USD, pick low, medium, or high risk, and optionally ask a question. SERV Reasoning returns a ranked read of the best-fitting markets for that risk level, the reasoning for each, and the main risks: time decay near maturity, thin liquidity, and bands that are still forming.
+**No wallet needed**
+- **Farm board.** Every liquid Pendle YT with its points program, points per day per $100, cost per 1,000 points, decay by maturity, YT leverage, and band position. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV.
+- **Band board.** Implied APY placed in its 90-day band: P12 means only 12% of days were lower.
+- **Ask BANDIT.** Enter a size, a goal (farm points, fixed rate, balanced) and a risk level. SERV Reasoning returns a ranked read with the points math and the main risks.
+- **Telegram alerts.** Pick a market and a band trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
 
-## How BANDIT reads a band
+**With your own wallet (Rabby, MetaMask, any browser wallet)**
+- **Trade with BANDIT.** BANDIT builds the Pendle trade on Robinhood Chain from plain ETH, SERV Reasoning confirms or holds off with a reason, and you sign it yourself. BANDIT never holds your funds.
 
-| Term | Meaning |
+**Autonomous agent (owner)**
+- Set a **band rule** (enter or exit a YT when its band percentile crosses a level) or **Farm mode** (buy the cheapest points under your max cost, skip the top 20% of each band, rotate near maturity or when another market is 30% cheaper per point).
+- Every 10 minutes the watcher checks each rule. On a trigger it gets a live Pendle quote, and **SERV Reasoning must confirm with a written reason** before anything happens.
+- Trades run on Robinhood Chain from the agent wallet, and every one is simulated first. Telegram gets the points math and the reason. Receipts link each trade to the explorer, and a points ledger tracks estimated points and decay.
+- **Agent Live** visualizes each run step by step: scan, rules, quote, SERV Reasoning, Robinhood Chain, Telegram.
+
+## How BANDIT prices a point
+
+For a YT held to maturity, per $1 spent:
+
+| Quantity | Formula |
 | --- | --- |
-| Band | Lowest to highest daily implied APY over the last 90 days, including today. |
-| Percentile | Share of those days with a lower implied APY than right now. P12 means 12% of days were lower, near floor. P90 means near top. |
-| Band forming | Under 14 days of history. BANDIT shows the rate but no percentile until the band has enough days. |
-| 7-day change | Implied APY now minus implied APY 7 days ago, in percentage points. |
+| YT leverage | underlying exposure per $1 of YT, from Pendle prices (falls back to `1 / (1 - (1 + implied)^(-days/365))`) |
+| Points earned | leverage x points rate x days to maturity |
+| Value back | leverage x underlying APY x days / 365 (the yield the YT collects, if rates hold) |
+| Decay cost | 1 - value back |
+| Cost per 1,000 points | decay cost / points earned x 1,000 |
 
-A low percentile means the PT fixed rate sits near the bottom of its range, and YT exposure is priced near its 90-day low. A high percentile means the fixed rate sits near the top of its range.
+- The points rate comes from Pendle's published multipliers, in Pendle units: 1 point is a 1x multiplier on $1 for 1 day.
+- `points-config.json` holds what Pendle does not publish: project names, statuses (confirmed points, speculative airdrop, none known), optional base rates to convert to a program's real points, and AirdropSea guide links.
+- BANDIT never invents a rate. Unknown rates show as "rate unknown" and stay out of the cost ranking.
+- **Outlier guard:** markets with APY above 200%, under $50K of liquidity, or under 7 days to maturity are labelled distorted and kept out of rankings and agent entries.
 
 ## How it uses SERV Reasoning
 
-`/api/ask` is a serverless function that calls SERV Reasoning through the OpenAI SDK:
+Three places, all through the OpenAI SDK against `https://inference-api.openserv.ai/v1` (model `gpt-5.4-mini`, strict `json_schema` output):
 
-- Base URL `https://inference-api.openserv.ai/v1`, model `gpt-5.4-mini` (set `SERV_MODEL` to use any other model from the SERV catalog).
-- The system prompt holds BANDIT's analyst role, how to read band data, how to rank for each risk level, and the wording rules (describe, never instruct, no advice language). It stays fixed so SERV can cache its reasoning prompt.
-- The user message carries the user's size, risk level, and question, plus the top 20 markets by liquidity as structured JSON: implied and underlying APY, band min, max, percentile and status, 7-day change, days to maturity, liquidity, and the position as a share of pool liquidity.
-- SERV returns strict JSON (`response_format: json_schema`, `strict: true`): a headline, a ranked list with a band read, why it fits, trade-offs and watch tags per market, and the main risks. BANDIT renders each ranked market with its live band gauge next to SERV's reasoning.
-- If the SERV call fails, the UI shows the error. There is no fallback model.
+1. **Risk gate.** Before the agent acts, or before a user signs, SERV weighs band position, points cost, decay, liquidity and the live price impact. It returns `confirm` or `reject` with a headline and a plain-language reason, for example "cheapest points on the board, but only 9 days left, so decay is fast". Only a confirmed trigger proceeds, and the code still enforces the hard caps on top.
+2. **Ask BANDIT.** A ranked read for the user's size, goal and risk level.
+3. **Alerts.** A short read attached to each Telegram alert.
 
-The key lives only in the `SERV_API_KEY` environment variable on the server. It never reaches the browser.
+There is no fallback model. If SERV fails, the agent does nothing and the UI says so.
+
+## Safety
+
+- Hard caps in code: $25 per trade, $100 per day, 5% maximum price impact, 3% maximum slippage, no entries under 3 days to maturity.
+- Only allowlisted Robinhood Chain markets are traded, and distorted ones are refused.
+- Transactions only go to Pendle's router, and every one is simulated before it is sent.
+- Dry run by default. Nothing is sent until `AGENT_LIVE=true`, and `AGENT_PAUSED=true` stops everything.
+- Secrets live only in server env vars and never reach the browser. Trading rules need the owner key.
 
 ## Architecture
 
 ```
-public/index.html   static page: board, signal cards, band notes, Ask BANDIT
-api/markets.js      GET  /api/markets  live Pendle data plus computed bands, cached 5 minutes
-api/ask.js          POST /api/ask      SERV Reasoning call
-lib/pendle.js       Pendle API client and band math
-dev-server.mjs      local server that runs the same functions
+public/            index.html, app.css, app.js, art/ (illustrations)
+api/markets.js     GET  live Pendle markets, bands, points economics (cached 5 min)
+api/ask.js         POST Ask BANDIT (SERV Reasoning)
+api/agent.js       GET  agent status, rules, receipts, ledger, last run trace; POST rules, run now, alerts
+api/watch.js       GET  scheduled watcher (Vercel cron, every 10 minutes)
+api/trade.js       POST Trade with BANDIT: quote plus SERV review for a user's own wallet
+api/telegram.js    POST Telegram bot webhook (/start deep links)
+lib/pendle.js      Pendle API client, band math, points math
+lib/agent.js       rules, SERV gate, caps, execution, watcher, ledger
+lib/trade.js       Pendle convert API (ETH to YT and back) on Robinhood Chain
+lib/chain.js       Robinhood Chain clients (viem)
+lib/serv.js        SERV Reasoning client
+lib/store.js       Upstash Redis (rules, receipts, positions)
+lib/telegram.js    Telegram Bot API
+points-config.json editable points data
 ```
 
-Data comes from Pendle's public hosted API (`api-v2.pendle.finance`): active markets per chain, current market data, and daily implied APY history. Markets below `MIN_LIQUIDITY_USD` (one constant in `lib/pendle.js`) are left out. `/api/markets` is cached for 5 minutes at the edge and in memory, so the page loads fast and Pendle is not hammered.
+Data comes from Pendle's hosted API (`api-v2.pendle.finance`): active markets, daily implied APY history, asset prices, and `POST /v3/sdk/4663/convert` for trade calldata on Robinhood Chain (chain 4663).
 
-## Run it locally
+## Run it
 
 ```bash
-git clone https://github.com/toteonsol/bandit
-cd bandit
+git clone https://github.com/toteonsol/bandit && cd bandit
 npm install
-cp .env.example .env.local   # then paste your SERV key into SERV_API_KEY
+cp .env.example .env.local   # fill in what you have
 npm run dev                  # http://localhost:3000
 ```
 
-Get a SERV key at console.openserv.ai under API Keys.
-
-## Deploy
-
-Static page plus two serverless functions on Vercel. Add `SERV_API_KEY` under Project Settings, Environment Variables, then redeploy.
+Environment variables: `SERV_API_KEY`, `OWNER_KEY`, `TELEGRAM_BOT_TOKEN`, `AGENT_PRIVATE_KEY` (a fresh wallet funded with a little ETH on Robinhood Chain), Upstash Redis (`KV_REST_API_URL` and `KV_REST_API_TOKEN`), optional `AGENT_LIVE=true`, `AGENT_PAUSED=true`, `CRON_SECRET`, `SERV_MODEL`, `PUBLIC_URL`.
 
 ## Roadmap
 
-A Pro tier: alerts when a market crosses a band threshold you set (for example P10 or P90), custom band windows, more chains, and more venues.
-
-Built for the OpenServ SERV Hackathon, Edition 01, Open Track.
+- Agent accounts for everyone: a smart account per user (email or passkey login), funded by the user, with a session key that lets BANDIT trade only within that user's caps. That gives the same one-tap feel without BANDIT holding anyone's money.
+- A Pro tier with more rules, faster checks, more markets and chains, and custom band thresholds, plus an optional per-trade fee.
+- Verified base rates per points program, so costs read in each program's real points.
