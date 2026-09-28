@@ -1,21 +1,22 @@
 # BANDIT
 
-**The agent that farms points while you sleep.**
+**The YT trading agent that works while you sleep.**
 
 Live app: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
 Track: Mainnet & MCP (Robinhood Chain), OpenServ SERV Hackathon Edition 01
 
-BANDIT is the first agent that prices airdrop points. People buy Pendle YTs to farm points for future airdrops, but nobody tells them what a point actually costs. BANDIT turns YT leverage, points multipliers and time decay into one number, **cost per 1,000 points**. It places every rate in its own 90-day band, then runs an autonomous agent on **Robinhood Chain** that acts on your rules only when **SERV Reasoning** agrees.
+A YT's price moves with its implied APY, yet nobody shows traders whether a YT is cheap or expensive against its own history. BANDIT places every Pendle YT in its own 90-day range and shows its **room to run**: what it would gain if its rate returned to its 90-day high, and what it would lose back at its low, before decay runs out the clock. Then it runs an autonomous agent on **Robinhood Chain** that trades your rules only when **SERV Reasoning** agrees. Farming points? BANDIT also prices a point: **cost per 1,000 points**.
 
 Data and reasoning only. Not financial advice.
 
 ## What you can do
 
 **No wallet needed**
-- **Farm board.** Every liquid Pendle YT with its points program, points per day per $100, cost per 1,000 points, decay by maturity, YT leverage, and band position. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV.
+- **Home.** Where the YTs sit right now: most room to run, already at the top, biggest 7-day move. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV, each with its range and room to run.
+- **Points.** For airdrop hunters: every YT with a points program, points per day per $100, cost per 1,000 points, decay by maturity and YT leverage.
 - **Band board.** Implied APY placed in its 90-day band: P12 means only 12% of days were lower.
-- **Ask BANDIT.** Enter a size, a goal (farm points, fixed rate, balanced) and a risk level. SERV Reasoning returns a ranked read with the points math and the main risks.
+- **Ask BANDIT.** Enter a size, a goal (trade the range, farm points, fixed rate) and a risk level. SERV Reasoning returns a ranked read with the points math and the main risks.
 - **Telegram alerts.** Pick a market and a band trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
 
 **With your own wallet (Rabby, MetaMask, any browser wallet)**
@@ -26,6 +27,10 @@ Data and reasoning only. Not financial advice.
 - Every 10 minutes the watcher checks each rule. On a trigger it gets a live Pendle quote, and **SERV Reasoning must confirm with a written reason** before anything happens.
 - Trades run on Robinhood Chain from the agent wallet, and every one is simulated first. Telegram gets the points math and the reason. Receipts link each trade to the explorer, and a points ledger tracks estimated points and decay.
 - **Agent Live** visualizes each run step by step: scan, rules, quote, SERV Reasoning, Robinhood Chain, Telegram.
+
+## How BANDIT reads a range
+
+YT price in underlying is `1 - (1 + implied)^(-days/365)`, so a YT gains when its implied APY rises. BANDIT takes the lowest and highest daily implied APY of the last 90 days (the band), places today's rate in it as a percentile, and computes room to run: the YT's value at the band high and at the band low, divided by its value now. A big gain with a small loss reads as room to run. About zero gain reads as already at the top.
 
 ## How BANDIT prices a point
 

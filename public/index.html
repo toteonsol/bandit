@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>BANDIT · The agent that farms points while you sleep</title>
-<meta name="description" content="BANDIT prices every airdrop point on Pendle YTs, places each rate in its 90-day band, and runs an agent on Robinhood Chain that acts on your rules only when SERV Reasoning agrees.">
-<meta property="og:title" content="BANDIT · The agent that farms points while you sleep">
-<meta property="og:description" content="Prices airdrop points on Pendle YTs and farms the cheapest ones on Robinhood Chain, with SERV Reasoning as the risk gate.">
+<title>BANDIT · The YT trading agent that works while you sleep</title>
+<meta name="description" content="BANDIT shows where every Pendle YT sits in its own 90-day range, how much room it has to run, and runs an agent on Robinhood Chain that trades your rules only when SERV Reasoning agrees.">
+<meta property="og:title" content="BANDIT · The YT trading agent that works while you sleep">
+<meta property="og:description" content="Where every Pendle YT sits in its range, the room it has to run, and an agent on Robinhood Chain that trades it, with SERV Reasoning as the risk gate.">
 <meta name="theme-color" content="#0A0B08">
 <link rel="icon" href="/art/logo-mask.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/favicon.svg" type="image/svg+xml">
@@ -23,7 +23,7 @@
     <span class="mark">BANDIT</span>
   </a>
   <nav class="tabs" aria-label="Primary">
-    <a href="#/" data-route="farm">Farm</a>
+    <a href="#/" data-route="farm">Home</a>
     <a href="#/bands" data-route="bands">Bands</a>
     <a href="#/agent" data-route="agent"><i class="dot" id="tabAgentDot"></i>Agent</a>
     <a href="#/receipts" data-route="receipts">Receipts</a>
@@ -36,48 +36,53 @@
 <main class="shell">
 
   <!-- FARM (home) -->
-  <section class="view" id="view-farm" aria-label="Farm">
+  <section class="view" id="view-farm" aria-label="Home">
     <div class="hero">
       <div>
         <span class="eyebrow">Built on SERV Reasoning · Live on Robinhood Chain</span>
-        <h1>The agent that farms points <em>while you sleep.</em></h1>
-        <p class="lede">BANDIT prices every airdrop point on Pendle YTs, shows where each rate sits in its 90-day band, and runs an agent on Robinhood Chain that acts on your rules only when SERV Reasoning agrees.</p>
+        <h1>The YT trading agent that works <em>while you sleep.</em></h1>
+        <p class="lede">A YT's price moves with its implied APY. BANDIT shows where every Pendle YT sits in its own 90-day range, near the floor with room to run or already at the top, and runs an agent on Robinhood Chain that trades your rules only when SERV Reasoning agrees. Farming points? It prices those too.</p>
         <div class="ctas">
           <a class="btn primary" href="#/agent">Meet the agent <span class="arr">→</span></a>
-          <a class="btn ghost" href="#farm-board">See what points cost</a>
+          <a class="btn ghost" href="#farm-board">See the ranges</a>
         </div>
         <div class="stats" id="heroStats">
-          <div class="stat"><div class="v lime" data-k="cheapest"><span class="sk" style="width:90px;height:22px"></span></div><div class="k">Cheapest 1K pts now</div></div>
-          <div class="stat"><div class="v" data-k="priced"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">Markets priced</div></div>
+          <div class="stat"><div class="v lime" data-k="floor"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">Near the floor</div></div>
+          <div class="stat"><div class="v" data-k="top" style="color:var(--hi)"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">Near the top</div></div>
           <div class="stat"><div class="v" data-k="rh"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">On Robinhood Chain</div></div>
         </div>
       </div>
       <div class="art">
         <img src="/art/hero-night.svg" alt="BANDIT the raccoon asleep in a hammock while points fall like stars">
-        <div class="float f1"><span class="ic">✦</span><div><b id="floatCheapest">pricing points</b><span id="floatCheapestSub">cheapest right now</span></div></div>
+        <div class="float f1"><span class="ic">✦</span><div><b id="floatCheapest">reading the ranges</b><span id="floatCheapestSub">most room to run</span></div></div>
         <div class="float f2"><span class="ic">☾</span><div><b id="floatAgent">agent asleep</b><span id="floatAgentSub">checks on a schedule</span></div></div>
       </div>
     </div>
 
     <div class="section">
-      <div class="sechead"><div><span class="eyebrow">How it works</span><h2>Points are the product. BANDIT puts a price on them.</h2></div></div>
+      <div class="sechead"><div><span class="eyebrow">How it works</span><h2>Every YT has a range. BANDIT knows where it sits.</h2></div></div>
       <div class="steps">
-        <article class="card step"><span class="no">01</span><img src="/art/step-price.svg" alt=""><h3>Price every point</h3><p>YT holders earn points that can turn into airdrops. BANDIT turns multipliers, leverage and decay into one number: what 1,000 points really cost you.</p></article>
-        <article class="card step"><span class="no">02</span><img src="/art/step-rule.svg" alt=""><h3>Set a rule</h3><p>Pick a market and a trigger, like band below P20, or switch on Farm mode to chase the cheapest points. Caps are hard-coded: $25 a trade, $100 a day.</p></article>
+        <article class="card step"><span class="no">01</span><img src="/art/step-price.svg" alt=""><h3>Read the range</h3><p>BANDIT places each YT's implied APY in its own 90-day range and shows the room to its high and its low, plus days left before decay. For points farmers, it prices 1,000 points too.</p></article>
+        <article class="card step"><span class="no">02</span><img src="/art/step-rule.svg" alt=""><h3>Set a rule</h3><p>Enter a YT when it sits near its floor, exit when it reaches its top, or switch on Farm mode for points. Caps are hard-coded: $25 a trade, $100 a day.</p></article>
         <article class="card step"><span class="no">03</span><img src="/art/step-sleep.svg" alt=""><h3>Sleep on it</h3><p>The agent checks on a schedule. SERV Reasoning confirms or holds off, the trade lands on Robinhood Chain, and Telegram tells you why.</p></article>
       </div>
     </div>
 
+    <div class="section">
+      <div class="sechead"><div><span class="eyebrow">Right now</span><h2>Where the YTs sit</h2><p>Room to run is what a YT would gain if its rate returned to its 90-day high today. The move has to happen before maturity, because YT decays as time runs out.</p></div></div>
+      <div class="signals" id="signals"></div>
+    </div>
+
     <div class="section" id="farm-board">
       <div class="sechead">
-        <div><span class="eyebrow">Robinhood Chain</span><h2>Where your agent farms</h2><p>Pendle YTs on Robinhood Chain, including tokenized NVDA, PFE and SGOV. No project here publishes a points rate yet, so BANDIT shows them as speculative airdrop plays with their band and decay, never an invented number.</p></div>
+        <div><span class="eyebrow">Robinhood Chain</span><h2>Where your agent trades</h2><p>Pendle YTs on Robinhood Chain, including tokenized NVDA, PFE and SGOV, with their range and room to run. No project here publishes a points rate yet, so any airdrop value is speculative and BANDIT never invents one.</p></div>
       </div>
       <div class="farm-grid" id="rhGrid"></div>
     </div>
 
     <div class="section">
       <div class="sechead">
-        <div><span class="eyebrow">Priced points</span><h2>What 1,000 points cost right now</h2><p>Cost per 1,000 points is the expected YT decay to maturity divided by the points you would earn. Lower is cheaper. Free means the underlying yield should cover the YT cost if rates hold. Distorted markets are shown but never ranked.</p></div>
+        <div><span class="eyebrow">Farming points?</span><h2>What 1,000 points cost right now</h2><p>For points and airdrop hunters: the expected YT decay to maturity divided by the points you would earn. Lower is cheaper. Free means the underlying yield should cover the YT cost if rates hold. Distorted markets are shown but never ranked.</p></div>
         <div class="filterbar" id="farmFilters">
           <button class="chip on" data-farmchain="all">All</button>
           <button class="chip" data-farmchain="1">Ethereum</button>
@@ -101,7 +106,7 @@
         <span class="hide-m hide-l">Chain</span>
         <span>90-day band position</span>
         <button class="hide-m" data-sort="pct">Band pctile</button>
-        <button class="hide-m hide-l" data-sort="cost">Cost / 1K pts</button>
+        <button class="hide-m hide-l" data-sort="up">Room to high</button>
         <button class="hide-m" data-sort="liq">Liquidity</button>
         <button data-sort="apy">Implied APY</button>
       </div>
@@ -136,7 +141,7 @@
 </main>
 
 <nav class="tabbar" aria-label="Primary">
-  <a href="#/" data-route="farm"><span class="ti">✦</span>Farm</a>
+  <a href="#/" data-route="farm"><span class="ti">✦</span>Home</a>
   <a href="#/bands" data-route="bands"><span class="ti">≋</span>Bands</a>
   <a href="#/agent" data-route="agent"><span class="ti">☾</span>Agent</a>
   <a href="#/receipts" data-route="receipts"><span class="ti">▤</span>Receipts</a>
@@ -159,9 +164,9 @@
         <label class="fld"><span class="fl">Position size</span><span class="money"><input class="inp" id="askSize" inputmode="decimal" value="1,000" autocomplete="off"></span></label>
         <label class="fld"><span class="fl">Markets</span><select class="inp" id="askChain"><option value="all">All chains</option><option value="4663">Robinhood Chain</option><option value="1">Ethereum</option><option value="42161">Arbitrum</option></select></label>
       </div>
-      <div class="fld"><span class="fl">Goal</span><div class="seg" id="askGoal"><button type="button" data-v="points" class="on">Farm points</button><button type="button" data-v="balanced">Balanced</button><button type="button" data-v="fixed">Fixed rate</button></div></div>
+      <div class="fld"><span class="fl">Goal</span><div class="seg" id="askGoal"><button type="button" data-v="trade" class="on">Trade the range</button><button type="button" data-v="points">Farm points</button><button type="button" data-v="fixed">Fixed rate</button></div></div>
       <div class="fld"><span class="fl">Risk level</span><div class="seg" id="askRisk"><button type="button" data-v="low" class="lo">Low</button><button type="button" data-v="medium" class="mid on">Medium</button><button type="button" data-v="high" class="hi">High</button></div></div>
-      <label class="fld"><span class="fl">Question<em>optional</em></span><textarea class="inp" id="askQ" rows="2" maxlength="600" placeholder="e.g. Where are the cheapest points with at least a month left?"></textarea></label>
+      <label class="fld"><span class="fl">Question<em>optional</em></span><textarea class="inp" id="askQ" rows="2" maxlength="600" placeholder="e.g. Which YTs have the most room to run with at least a month left?"></textarea></label>
       <input type="hidden" id="askFocus">
       <div class="err-line hidden" id="askErr"></div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">

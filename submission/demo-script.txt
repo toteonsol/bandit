@@ -8,13 +8,13 @@ BEFORE YOU RECORD
 4. AGENT_LIVE=true set in Vercel and redeployed. Keep the trade small: $10 on a market whose price impact is under 5% (PFE or SHROOM, not NVDA).
 5. Warm up once: open Ask BANDIT and ask any question, so SERV's first-call setup is out of the way.
 
-0:00 to 0:10  THE HOOK (Farm tab, top)
-Show: the hero with BANDIT asleep in the hammock, and the "cheapest 1K pts" stat.
-Say: "People buy Pendle YTs to farm airdrop points, but nobody tells them what a point costs. BANDIT does, and its agent farms on Robinhood Chain while you sleep."
+0:00 to 0:10  THE HOOK (Home, top)
+Show: the hero with BANDIT asleep in the hammock, and the "near the floor / near the top" stats.
+Say: "A YT's price moves with its rate, but nobody tells you if a YT is cheap or already at its top. BANDIT does, and its agent trades your rules on Robinhood Chain while you sleep."
 
-0:10 to 0:24  PRICING POINTS (scroll the Farm board)
-Show: the Robinhood Chain cards (tokenized NVDA, PFE, SGOV) with "speculative airdrop, rate unknown", then the priced cards with cost per 1,000 points, points per day, decay and the band gauge.
-Say: "Every YT gets one number: cost per 1,000 points, from YT leverage, the points multiplier and decay. Robinhood Chain markets have no published rate, so BANDIT says so instead of inventing one. Distorted markets are flagged and never ranked."
+0:10 to 0:24  THE RANGES (scroll Home: "Where the YTs sit", then the Robinhood Chain cards, then Points)
+Show: the "Where the YTs sit" cards (most room to run, already at the top, biggest move), then the Robinhood Chain cards with their range, then a glance at the Points section.
+Say: "Every YT sits somewhere in its 90-day range. strUSD is near its floor: plus 12% if it gets back to its high, minus 2% to its low. Tokenized NVDA on Robinhood Chain is already at its high. Farming points? BANDIT prices those too. Distorted markets are flagged and never ranked."
 
 0:24 to 0:36  ARM A RULE (Agent tab)
 Show: the rule builder. Band rule, YT-PFE, trigger, action Enter YT, size $10, slippage 3%. Click "Arm this rule". Point at the hard limits card.

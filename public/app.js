@@ -87,42 +87,81 @@ const statusLabel = s => s === 'confirmed points' ? 'Confirmed points' : s === '
 const byCheapest = (a, b) => a.points.costPer1k - b.points.costPer1k || (b.points.pointsPerDollar || 0) - (a.points.pointsPerDollar || 0);
 const tradable = m => m.chainId === RH && !m.distorted && (!state.agent || state.agent.allowlist.some(a => a.id === m.id));
 
-function marketCard(m, rank) {
+const upPct = x => (x == null || !isFinite(x)) ? 'n/a' : `${x >= 0 ? '+' : ''}${(x * 100).toFixed(x !== 0 && Math.abs(x) < 0.1 ? 1 : 0)}%`;
+const rangeLine = m => m.range ? `${upPct(m.range.toHigh)} to its 90-day high · ${upPct(m.range.toLow)} to its low` : (m.band.status === 'forming' ? `Band forming, day ${m.band.days} of 14` : 'No band history yet');
+
+// mode 'trade' leads with room to run; mode 'points' leads with cost per 1,000 points.
+function marketCard(m, rank, mode = 'trade') {
   const p = m.points || {};
   const c = cost(p.costPer1k);
-  const big = p.rate == null ? '<span class="v unknown">Rate unknown</span>' : c === 'Free' ? '<span class="v free">Free</span>' : `<span class="v">${c}</span>`;
   const decay = p.decayCostRatio == null ? 'n/a' : `${Math.max(0, Math.round(p.decayCostRatio * 100))}%`;
+  let big, bigK, kpis;
+  if (mode === 'points') {
+    big = p.rate == null ? '<span class="v unknown">Rate unknown</span>' : c === 'Free' ? '<span class="v free">Free</span>' : `<span class="v">${c}</span>`;
+    bigK = 'per 1,000 pts';
+    kpis = [[p.ptsPerDay100 != null ? compact(p.ptsPerDay100) : 'n/a', 'pts/day per $100'], [decay, 'decays by maturity'], [m.leverage ? Math.round(m.leverage) + 'x' : 'n/a', 'YT leverage']];
+  } else {
+    const r = m.range;
+    big = r ? `<span class="v ${r.toHigh <= 0.005 ? 'unknown' : 'free'}">${r.toHigh <= 0.005 ? 'At high' : upPct(r.toHigh)}</span>` : `<span class="v unknown" style="font-size:16px">${m.band.status === 'forming' ? 'Band forming' : 'No range yet'}</span>`;
+    bigK = r ? (r.toHigh <= 0.005 ? 'no room left to its 90d high' : 'if the rate returns to its 90d high') : `day ${m.band.days} of 14`;
+    kpis = [[r ? upPct(r.toLow) : 'n/a', 'to its 90d low'], [`${m.daysToMaturity}d`, 'left to run'], [m.leverage ? Math.round(m.leverage) + 'x' : 'n/a', 'YT leverage']];
+  }
+  const pointsBadge = p.status === 'confirmed points' && p.program ? `<span class="badge plain none">${esc(p.program)}${p.multiplier ? ` ${p.multiplier}x` : ''}</span>` : '';
   return `<article class="card mcard ${m.distorted ? 'distorted' : ''}" data-id="${esc(m.id)}">
     ${rank ? `<span class="rank-no">${rank}</span>` : ''}
     <div class="top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>
       <div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(p.project || m.protocol || 'Pendle')} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d left</div></div></div>
-    <div class="badges"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span><span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>${p.program && p.status === 'confirmed points' ? `<span class="badge plain none">${esc(p.program)}${p.multiplier ? ` ${p.multiplier}x` : ''}</span>` : ''}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
-    <div class="big">${big}<span class="k">per 1,000 pts</span></div>
-    <div class="kpis"><div class="kpi"><b>${p.ptsPerDay100 != null ? compact(p.ptsPerDay100) : 'n/a'}</b><span>pts/day per $100</span></div><div class="kpi"><b>${decay}</b><span>decays by maturity</span></div><div class="kpi"><b>${m.leverage ? Math.round(m.leverage) + 'x' : 'n/a'}</b><span>YT leverage</span></div></div>
+    <div class="badges"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span>${mode === 'points' || p.status !== 'none known' ? `<span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>` : ''}${pointsBadge}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
+    <div class="big">${big}<span class="k">${bigK}</span></div>
+    <div class="kpis">${kpis.map(([v, k]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
     <div>${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div></div>
-    ${p.note ? `<p class="note">${clean(p.note)}</p>` : ''}
+    ${p.note && mode === 'trade' && m.chainId === RH ? `<p class="note">${clean(p.note)}</p>` : ''}
     <div class="acts"><button class="btn soft xs" data-ask="${esc(m.id)}">Ask BANDIT</button><button class="btn soft xs" data-alert="${esc(m.id)}">Alert me</button>${tradable(m) ? `<button class="btn primary xs" data-trade="${esc(m.id)}">Trade</button>` : ''}${p.guideUrl ? `<a class="guide" href="${esc(p.guideUrl)}" target="_blank" rel="noopener">Read the guide →</a>` : ''}</div>
   </article>`;
+}
+
+function signalCard(cls, eyebrow, m, headline, body) {
+  return `<article class="card sig ${cls}" data-ask="${esc(m.id)}"><div class="glow"></div>
+    <div class="eyebrow-s"><span class="pip"></span>${eyebrow}</div>
+    <div class="sig-top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(m.chainName)} · ${m.daysToMaturity}d left · ${usd(m.liquidityUsd)}</div></div></div>
+    <div class="sig-big">${headline}</div>
+    ${bandHtml(m)}
+    <p class="why">${body}</p>
+    <span class="cta">Ask BANDIT about it <span class="arr">→</span></span></article>`;
+}
+
+function renderSignals() {
+  const ranged = state.data.markets.filter(m => m.range && !m.distorted);
+  const room = [...ranged].filter(m => m.range.toHigh > 0.005).sort((a, b) => (b.range.ratio ?? 0) - (a.range.ratio ?? 0) || b.range.toHigh - a.range.toHigh)[0];
+  const top = [...ranged].sort((a, b) => b.band.percentile - a.band.percentile || b.liquidityUsd - a.liquidityUsd).find(m => m.chainId === RH) || [...ranged].sort((a, b) => b.band.percentile - a.band.percentile)[0];
+  const mover = state.data.markets.filter(m => m.change7d != null && !m.distorted && m !== room && m !== top).sort((a, b) => Math.abs(b.change7d) - Math.abs(a.change7d))[0];
+  const cards = [];
+  if (room) cards.push(signalCard('lo', 'Most room to run', room, `${upPct(room.range.toHigh)} <small>to its 90-day high</small>`, `Implied APY <b>${pct(room.impliedApy)}</b> sits at <b>P${Math.round(room.band.percentile)}</b>, near the floor of its band. Back to the high is <b>${upPct(room.range.toHigh)}</b>; back to the low is <b>${upPct(room.range.toLow)}</b>, with ${room.daysToMaturity} days for the move before decay.`));
+  if (top) cards.push(signalCard('hi', 'Already at the top', top, `${upPct(top.range.toLow)} <small>to its 90-day low</small>`, `Implied APY <b>${pct(top.impliedApy)}</b> sits at <b>P${Math.round(top.band.percentile)}</b>${top.range.toHigh <= 0.005 ? ', its 90-day high' : ''}. Little room left above and <b>${upPct(top.range.toLow)}</b> back to the low. Holders sit on the gain; new entries pay the top of the range.`));
+  if (mover) cards.push(signalCard('move', 'Biggest 7-day move', mover, `${mover.change7d > 0 ? '+' : ''}${(mover.change7d * 100).toFixed(2)}pp <small>implied APY in 7 days</small>`, `Implied APY moved to <b>${pct(mover.impliedApy)}</b>${formed(mover) ? `, now <b>P${Math.round(mover.band.percentile)}</b> of its band` : ''}. YT prices move with the rate, so a fast move is where traders and points speculators crowd in.`));
+  $('#signals').innerHTML = cards.join('');
+  readyUp($('#signals'));
 }
 
 function renderFarm() {
   if (!state.data) return;
   const ms = state.data.markets;
+  renderSignals();
   const rh = ms.filter(m => m.chainId === RH).sort((a, b) => a.distorted - b.distorted || b.liquidityUsd - a.liquidityUsd);
-  $('#rhGrid').innerHTML = rh.length ? rh.map(m => marketCard(m)).join('') : '<div class="card board-msg">No live Pendle markets on Robinhood Chain right now.</div>';
+  $('#rhGrid').innerHTML = rh.length ? rh.map(m => marketCard(m, 0, 'trade')).join('') : '<div class="card board-msg">No live Pendle markets on Robinhood Chain right now.</div>';
   const priced = ms.filter(m => m.chainId !== RH && m.points && m.points.rate != null && (state.farmChain === 'all' || String(m.chainId) === state.farmChain));
   const ranked = priced.filter(m => !m.distorted).sort(byCheapest);
   const rest = priced.filter(m => m.distorted);
-  $('#farmGrid').innerHTML = (ranked.map((m, i) => marketCard(m, i < 3 ? i + 1 : 0)).join('') + rest.map(m => marketCard(m)).join('')) || '<div class="card board-msg">No priced points on this chain right now.</div>';
+  $('#farmGrid').innerHTML = (ranked.map((m, i) => marketCard(m, i < 3 ? i + 1 : 0, 'points')).join('') + rest.map(m => marketCard(m, 0, 'points')).join('')) || '<div class="card board-msg">No priced points on this chain right now.</div>';
   $('#unitNote').textContent = state.data.pointsUnit ? `Points shown in ${state.data.pointsUnit}` : '';
   [$('#rhGrid'), $('#farmGrid')].forEach(readyUp);
-  const all = ms.filter(m => !m.distorted && m.points && m.points.costPer1k != null).sort(byCheapest);
-  const best = all[0];
+  const formedMs = ms.filter(m => formed(m) && !m.distorted);
   const set = (k, v) => { const el = $(`#heroStats [data-k="${k}"]`); if (el) el.textContent = v; };
-  set('cheapest', best ? cost(best.points.costPer1k) : 'n/a');
-  set('priced', ms.filter(m => m.points && m.points.rate != null).length);
+  set('floor', formedMs.filter(m => m.band.percentile <= 20).length);
+  set('top', formedMs.filter(m => m.band.percentile >= 80).length);
   set('rh', rh.length);
-  if (best) { $('#floatCheapest').textContent = `YT-${best.name} · ${cost(best.points.costPer1k)}`; $('#floatCheapestSub').textContent = 'cheapest 1,000 pts right now'; }
+  const best = ms.filter(m => m.range && !m.distorted && m.range.toHigh > 0.005).sort((a, b) => (b.range.ratio ?? 0) - (a.range.ratio ?? 0))[0];
+  if (best) { $('#floatCheapest').textContent = `YT-${best.name} · ${upPct(best.range.toHigh)} to high`; $('#floatCheapestSub').textContent = `P${Math.round(best.band.percentile)}, most room to run`; }
 }
 
 /* ---------- bands view ---------- */
@@ -140,14 +179,14 @@ function rowHtml(m) {
     <span class="hide-m hide-l"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span></span>
     ${bandHtml(m)}
     <div class="cell hide-m">${formed(m) ? `<span class="pct ${zone(m.band.percentile)}">P${Math.round(m.band.percentile)}</span>` : '<span class="pct forming">FORMING</span>'}<span class="lbl">${formed(m) ? zoneLabel(m.band.percentile) : `day ${m.band.days}`}</span></div>
-    <div class="cell hide-m hide-l">${p.rate == null ? 'n/a' : cost(p.costPer1k)}<span class="lbl">${p.rate == null ? statusLabel(p.status) : 'per 1K pts'}</span></div>
+    <div class="cell hide-m hide-l">${m.range ? upPct(m.range.toHigh) : 'n/a'}<span class="lbl">${m.range ? `low ${upPct(m.range.toLow)}` : 'no range'}</span></div>
     <div class="cell hide-m">${usd(m.liquidityUsd)}<span class="lbl">liquidity</span></div>
     <div class="cell apy">${pct(m.impliedApy)}${trend}</div>
   </div>`;
 }
 function renderBoard() {
   const { key, dir } = state.sort;
-  const val = m => ({ name: m.name.toLowerCase(), liq: m.liquidityUsd, apy: m.impliedApy, pct: m.band.percentile, cost: m.points?.costPer1k ?? Infinity })[key];
+  const val = m => ({ name: m.name.toLowerCase(), liq: m.liquidityUsd, apy: m.impliedApy, pct: m.band.percentile, up: m.range ? m.range.toHigh : -Infinity })[key];
   const ms = state.data.markets.filter(m => state.chain === 'all' || String(m.chainId) === state.chain).sort((a, b) => {
     if (key === 'pct' && formed(a) !== formed(b)) return formed(a) ? -1 : 1;
     const va = val(a), vb = val(b);
@@ -672,7 +711,7 @@ function renderTrade() {
   let html = `<div class="check ok" style="margin-bottom:16px"><span class="tick">✓</span><div>${esc((w.info && w.info.name) || 'Wallet')} · ${esc(shortAddr(w.address))}<small id="walletBal">Checking your balance on Robinhood Chain…</small></div><button class="btn soft xs" id="walletOff" style="margin-left:auto">Disconnect</button></div>`;
   if (!ms.length) { body.innerHTML = html + '<div class="callout"><span class="ic">!</span><div>No Robinhood Chain market passes the outlier guard right now.</div></div>'; return; }
   html += `<div class="form">
-    <label class="fld"><span class="fl">Market</span><select class="inp" id="tMarket">${ms.map(x => `<option value="${esc(x.id)}" ${x.id === t.marketId ? 'selected' : ''}>YT-${esc(x.name)} · ${x.daysToMaturity}d left · ${formed(x) ? 'P' + Math.round(x.band.percentile) : 'band forming'}</option>`).join('')}</select></label>
+    <label class="fld"><span class="fl">Market</span><select class="inp" id="tMarket">${ms.map(x => `<option value="${esc(x.id)}" ${x.id === t.marketId ? 'selected' : ''}>YT-${esc(x.name)} · ${x.daysToMaturity}d left · ${formed(x) ? `P${Math.round(x.band.percentile)}, ${x.range ? upPct(x.range.toHigh) + ' to high' : ''}` : 'band forming'}</option>`).join('')}</select></label>
     ${m ? `<div class="card" style="padding:14px">${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div>${m.points && m.points.note ? `<p class="help" style="margin-top:8px">${clean(m.points.note)}</p>` : ''}</div>` : ''}
     <div class="row2"><label class="fld"><span class="fl">Size</span><span class="money"><input class="inp" id="tSize" inputmode="decimal" value="${esc(t.size || 10)}"></span></label>
     <label class="fld"><span class="fl">Max slippage</span><select class="inp" id="tSlip"><option value="0.005">0.5%</option><option value="0.01" selected>1%</option><option value="0.02">2%</option><option value="0.03">3%</option></select></label></div>
@@ -806,7 +845,7 @@ document.addEventListener('click', e => {
   if ((el = q('[data-trade]'))) return openTrade(el.dataset.trade);
   if ((el = q('[data-chain]'))) { state.chain = el.dataset.chain; renderChains(); renderBoard(); return; }
   if ((el = q('[data-farmchain]'))) { state.farmChain = el.dataset.farmchain; $$('#farmFilters .chip').forEach(c => c.classList.toggle('on', c === el)); renderFarm(); return; }
-  if ((el = q('#boardHead [data-sort]'))) { const k = el.dataset.sort; state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: ['name', 'pct', 'cost'].includes(k) ? 1 : -1 }; renderBoard(); return; }
+  if ((el = q('#boardHead [data-sort]'))) { const k = el.dataset.sort; state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: ['name', 'pct'].includes(k) ? 1 : -1 }; renderBoard(); return; }
   if ((el = q('[data-toggle]'))) return ownerAction({ action: 'toggle-rule', id: el.dataset.toggle });
   if ((el = q('[data-del]'))) return ownerAction({ action: 'delete-rule', id: el.dataset.del });
   if ((el = q('[data-wallet]'))) return connectWallet(state.walletList[Number(el.dataset.wallet)]);

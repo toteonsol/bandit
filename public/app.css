@@ -130,6 +130,28 @@ img{display:block;max-width:100%}
 .step h3{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px}
 .step p{color:var(--text-2);font-size:13.5px;line-height:1.55}
 
+/* ---------- signal cards ---------- */
+.signals{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.sig{position:relative;overflow:hidden;padding:20px;display:flex;flex-direction:column;gap:12px;cursor:pointer;transition:border-color .2s,transform .2s var(--ease)}
+.sig:hover{border-color:var(--line-strong);transform:translateY(-2px)}
+.sig .glow{position:absolute;top:-50px;right:-50px;width:150px;height:150px;border-radius:50%;filter:blur(50px);opacity:.18;pointer-events:none;background:currentColor}
+.sig.lo{color:var(--lo)} .sig.hi{color:var(--hi)} .sig.move{color:var(--lime)}
+.sig>*:not(.glow){color:var(--text)}
+.eyebrow-s{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.sig.lo .eyebrow-s{color:var(--lo)} .sig.hi .eyebrow-s{color:var(--hi)} .sig.move .eyebrow-s{color:var(--lime)}
+.eyebrow-s .pip{width:7px;height:7px;border-radius:2px;background:currentColor}
+.sig-top{display:flex;align-items:center;gap:11px}
+.sig-top .nm{font-weight:700;font-size:15px}
+.sig-top .sub{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.sig-big{font-family:var(--font-data);font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.sig.lo .sig-big{color:var(--lo)} .sig.hi .sig-big{color:var(--hi)} .sig.move .sig-big{color:var(--lime)}
+.sig-big small{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--text-3);letter-spacing:0;margin-left:4px}
+.sig .why{font-size:13px;color:var(--text-2);line-height:1.55}
+.sig .why b{color:var(--text);font-weight:600}
+.sig .cta{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;margin-top:auto}
+.sig .cta .arr{color:var(--lime);transition:transform .18s}
+.sig:hover .cta .arr{transform:translateX(3px)}
+
 /* ---------- farm cards ---------- */
 .filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .fsep{width:1px;height:20px;background:var(--line-strong);margin:0 4px}
@@ -445,6 +467,7 @@ input[type=range]{width:100%;accent-color:var(--lime)}
   .hero{grid-template-columns:1fr}
   .hero h1{font-size:42px}
   .steps{grid-template-columns:1fr}
+  .signals{grid-template-columns:1fr}
   .agent-grid{grid-template-columns:1fr}
   .agent-hero{grid-template-columns:auto 1fr}
   .agent-hero .hero-acts{grid-column:1/-1}

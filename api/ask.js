@@ -6,13 +6,14 @@ import { rateLimited } from '../lib/store.js';
 
 const MAX_MARKETS = 20;
 const RISK_LEVELS = ['low', 'medium', 'high'];
-const GOALS = ['points', 'fixed', 'balanced'];
+const GOALS = ['trade', 'points', 'fixed'];
 
 // Kept stable on purpose: SERV caches its reasoning prompt per system prompt.
-const SYSTEM_PROMPT = `You are BANDIT, a yield-band and airdrop-points analyst for Pendle PT and YT markets. You read band and points data and explain, in plain language, where each market sits and what the trade-offs are for the user's position size, risk level, and goal. You present data and reasoning only. You never give financial advice.
+const SYSTEM_PROMPT = `You are BANDIT, a YT trading and airdrop-points analyst for Pendle markets. You read band and points data and explain, in plain language, where each market sits and what the trade-offs are for the user's position size, risk level, and goal. You present data and reasoning only. You never give financial advice.
 
 How to read the data:
 - implied_apy_pct is the market's implied APY. A PT holder locks in roughly this rate as a fixed yield until maturity. A YT holder pays for leveraged exposure to the underlying yield and to any points, so a lower implied APY means YT exposure is priced lower.
+- A YT's price rises when its implied APY rises and falls when it falls, and it decays toward zero at maturity. range.yt_to_band_high_pct is what the YT would gain if its implied APY returned to its 90-day high today; range.yt_to_band_low_pct is what it would lose at the 90-day low. A large gain with a small loss reads as room to run; about zero gain reads as already at the top. Any move has to happen before maturity.
 - Many people hold YT to farm points for future airdrops. points.status is "confirmed points" when Pendle publishes a program, "speculative airdrop" when no rate is published and any airdrop value is a guess, or "none known".
 - points.pts_per_day_per_100 is the estimated points per day for $100 of YT, points.unit says what a point is, points.cost_per_1k_pts is the expected decay cost per 1,000 points if held to maturity (lower is cheaper, 0 means the underlying yield is expected to cover the YT cost), and points.decay_cost_pct is the share of the YT cost expected to decay away.
 - band.min_pct and band.max_pct are the lowest and highest daily implied APY over the last 90 days (or since launch if younger). band.percentile is the share of those days with a lower implied APY than today: P12 reads as near floor, P50 as mid band, P90 as near top. band.status "forming" means under 14 days of history, so there is no percentile.
@@ -21,9 +22,9 @@ How to read the data:
 - Robinhood Chain markets are where BANDIT's autonomous agent trades. Several are tokenized stocks with 0 percent underlying yield, so their YT value rests on points or airdrops, which are speculative there.
 
 How to rank:
+- goal "trade": favor YTs near the floor of their band with the most room to run relative to the downside, enough days left for the move, and liquidity to exit. Flag YTs at the top of their band as little room left, even if they look popular.
 - goal "points": favor the lowest cost per 1,000 points with enough days left and liquidity; markets with no published rate cannot be priced, so mention them only as speculative options.
 - goal "fixed": favor PT fixed rates near the top of their band with deep liquidity.
-- goal "balanced": weigh both.
 - risk low: deep liquidity, formed bands, small size versus liquidity, no speculative airdrop plays. Medium: balance. High: speculative airdrop plays, forming bands, shorter maturities, or thinner pools can fit, but state each risk plainly.
 - If the user asks a question, answer it from the data. If the data cannot answer it, say what it does and does not show.
 
@@ -52,7 +53,7 @@ const ANSWER_SCHEMA = {
         properties: {
           ref: { type: 'string', description: 'The market ref from the data, for example m3.' },
           name: { type: 'string', description: 'The market name from the data.' },
-          lens: { type: 'string', enum: ['YT points farm', 'YT yield exposure', 'PT fixed rate', 'Speculative airdrop'] },
+          lens: { type: 'string', enum: ['YT range trade', 'YT points farm', 'PT fixed rate', 'Speculative airdrop'] },
           band_read: { type: 'string', description: 'Where the rate sits in its band, with the numbers.' },
           points_read: { type: 'string', description: 'Points per day and cost per 1,000 points, or that the rate is unknown.' },
           why_it_fits: { type: 'string', description: 'Why it fits this goal, risk level, and size.' },
@@ -96,6 +97,7 @@ function promptRow(ref, m, sizeUsd) {
     implied_apy_pct: r2(m.impliedApy * 100),
     underlying_apy_pct: m.underlyingApy == null ? null : r2(m.underlyingApy * 100),
     change_7d_pp: m.change7d == null ? null : r2(m.change7d * 100),
+    range: m.range ? { yt_to_band_high_pct: r2(m.range.toHigh * 100), yt_to_band_low_pct: r2(m.range.toLow * 100) } : null,
     liquidity_usd: Math.round(m.liquidityUsd),
     position_pct_of_liquidity: r2((sizeUsd / m.liquidityUsd) * 100),
     yt_leverage: m.leverage == null ? null : r2(m.leverage),
@@ -132,7 +134,7 @@ export async function POST(request) {
   try { input = await request.json(); } catch { return json(400, { error: 'Send JSON with sizeUsd, risk, goal, and an optional question.' }); }
   const sizeUsd = Number(input.sizeUsd);
   const risk = String(input.risk || '').toLowerCase();
-  const goal = GOALS.includes(String(input.goal)) ? String(input.goal) : 'points';
+  const goal = GOALS.includes(String(input.goal)) ? String(input.goal) : 'trade';
   const question = String(input.question || '').slice(0, 600).trim();
   const chain = String(input.chain || 'all');
   const focus = String(input.marketId || '');
