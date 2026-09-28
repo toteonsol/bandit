@@ -21,6 +21,8 @@ const formed = m => m.band && m.band.status === 'formed';
 const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - Date.parse(iso)) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
 const shortAddr = a => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '';
 const RH = 4663;
+const ICONS = {"check":"<path d=\"M20 6 9 17l-5-5\"/>","scan":"<circle cx=\"12\" cy=\"12\" r=\"8.5\" stroke-dasharray=\"3.2 3.2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>","pause":"<path d=\"M9 5.5v13M15 5.5v13\"/>","ban":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"m6 6 12 12\"/>","alert":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5v5.5M12 16.4v.1\"/>","send":"<path d=\"M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z\"/>","flag":"<path d=\"M5.5 21V4M5.5 4.5h11l-2.2 4 2.2 4h-11\"/>","spark":"<path d=\"M12 3.5 13.9 10.1 20.5 12l-6.6 1.9L12 20.5l-1.9-6.6L3.5 12l6.6-1.9z\"/>","pen":"<path d=\"M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z\"/><path d=\"m13.5 6.5 4 4\"/>","user":"<circle cx=\"12\" cy=\"8.5\" r=\"4\"/><path d=\"M4.5 20.5a7.5 7.5 0 0 1 15 0\"/>","copy":"<rect x=\"9\" y=\"9\" width=\"11.5\" height=\"11.5\" rx=\"2.2\"/><path d=\"M5.5 15V5.7a2.2 2.2 0 0 1 2.2-2.2H15\"/>","swap":"<path d=\"M7 7.5h13l-3.5-3.5M17 16.5H4l3.5 3.5\"/>","power":"<path d=\"M12 3v8.5M17.8 6.8a8 8 0 1 1-11.6 0\"/>","down":"<path d=\"m3.5 7 6.5 6.5 3.5-3.5 7 7\"/><path d=\"M20.5 11.5V17h-5.5\"/>","up":"<path d=\"m3.5 17 6.5-6.5 3.5 3.5 7-7\"/><path d=\"M20.5 12.5V7h-5.5\"/>","target":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><circle cx=\"12\" cy=\"12\" r=\"4.5\"/><circle cx=\"12\" cy=\"12\" r=\".8\" fill=\"currentColor\"/>","link":"<path d=\"M10 14a4.5 4.5 0 0 0 6.4 0l3.1-3.1a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3.1 3.1a4.5 4.5 0 0 0 6.4 6.4l1-1\"/>","gauge":"<path d=\"M12 14.5 16 10M3.6 17.5a9 9 0 1 1 16.8 0\"/>","clock":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>","drop":"<path d=\"M12 3s6.2 6.8 6.2 11a6.2 6.2 0 0 1-12.4 0C5.8 9.8 12 3 12 3z\"/>","flame":"<path d=\"M12 21c3.9 0 6.5-2.6 6.5-6.4 0-4.7-4.4-6.6-4.4-11.1-2.8 1.8-3.8 4.6-3.8 6.6-.9-.8-1.7-1.8-1.9-3.6-1.9 1.8-2.9 4.6-2.9 8.1 0 3.8 2.6 6.4 6.5 6.4z\"/>","moon":"<path d=\"M19.5 14.5A7.8 7.8 0 1 1 9.5 4.5a6.3 6.3 0 0 0 10 10z\"/>","wallet":"<rect x=\"3.5\" y=\"6\" width=\"17\" height=\"13\" rx=\"2.5\"/><path d=\"M3.5 9.5h17M15.5 14h2\"/>"};
+const ic = (name, size = 16) => `<svg class="i" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 const chainShort = m => ({ 4663: 'Robinhood', 1: 'Ethereum', 42161: 'Arbitrum' })[m.chainId] || m.chainName;
 const WALLET_CHAIN = { chainId: '0x1237', chainName: 'Robinhood Chain', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: ['https://rpc.mainnet.chain.robinhood.com'], blockExplorerUrls: ['https://robinhoodchain.blockscout.com'] };
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
@@ -79,7 +81,12 @@ function route() {
   if (r === 'agent' || r === 'receipts' || r === 'stream') loadAgent();
   if (r === 'ask') renderAskPage();
 }
-window.addEventListener('hashchange', route);
+const routeOf = () => ({ bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my', ask: 'ask', stream: 'stream' })[location.hash.replace(/^#\/?/, '').split('?')[0]] || 'farm';
+// A soft crossfade between pages where the browser supports it, unless the viewer prefers less motion.
+window.addEventListener('hashchange', () => {
+  if (document.startViewTransition && routeOf() !== state.route && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(route);
+  else route();
+});
 
 /* ---------- band gauge ---------- */
 function bandHtml(m, { labels = true } = {}) {
@@ -293,7 +300,7 @@ function rowMoreHtml(m) {
   const head = gr.score >= 0 ? `Entry grade ${gr.g}: ${gr.label.toLowerCase()}` : gr.label;
   const sub = gr.score >= 0 ? `Score ${gr.score} out of 100, from the numbers below. Data, not advice.` : m.distorted ? 'Left out of rankings until its numbers look normal.' : 'BANDIT grades a YT once it has 14 days of price history.';
   return `<div class="why-head">${gradeBadge(gr, true)}<div><b>${esc(head)}</b><span>${esc(sub)}</span></div></div>
-    <div class="why-grid">${gradeReasons(m).map(([t, b, s]) => `<div class="why ${t}"><i>${t === 'ok' ? '✓' : t === 'warn' ? '!' : '•'}</i><div><b>${esc(b)}</b><span>${esc(s)}</span></div></div>`).join('')}</div>
+    <div class="why-grid">${gradeReasons(m).map(([t, b, s]) => `<div class="why ${t}"><i>${t === 'ok' ? ic('check', 12) : t === 'warn' ? '!' : '•'}</i><div><b>${esc(b)}</b><span>${esc(s)}</span></div></div>`).join('')}</div>
     <div class="more-acts">
       <button class="btn primary sm" data-ask="${esc(m.id)}">Ask BANDIT about it</button>
       ${m.distorted ? '' : state.watching.has(m.id) ? '<a class="btn sm watching" href="#/my">✓ Your agent is watching</a>' : `<button class="btn soft sm" data-watch="${esc(m.id)}">Watch it with my agent</button>`}
@@ -632,7 +639,7 @@ function renderAgent() {
 
 function ruleHtml(r) {
   const owner = Boolean(state.owner);
-  const ico = r.kind === 'farm' ? '<span class="ico farm">✦</span>' : '<span class="ico">⚑</span>';
+  const ico = r.kind === 'farm' ? `<span class="ico farm">${ic('spark')}</span>` : `<span class="ico">${ic('flag')}</span>`;
   return `<div class="rule">${ico}<div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div>
     <div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span>${owner && r.status !== 'done' ? `<button class="btn soft xs" data-toggle="${esc(r.id)}">${r.status === 'active' ? 'Pause' : 'Resume'}</button>` : ''}${owner ? `<button class="btn soft xs" data-del="${esc(r.id)}">Delete</button>` : ''}</div></div>`;
 }
@@ -712,7 +719,7 @@ function drawQr(text) {
 }
 
 /* ---------- receipts ---------- */
-const EVT_ICON = { trade: '✓', simulated: '◌', held: '⏸', refused: '⛔', failed: '!', error: '!', alert: '✈', rule: '⚑' };
+const EVT_ICON = { trade: 'check', simulated: 'scan', held: 'pause', refused: 'ban', failed: 'alert', error: 'alert', alert: 'send', rule: 'flag' };
 function eventHtml(e) {
   let title = e.text || e.type, body = '';
   if (e.type === 'trade') { title = `${e.verb} ${e.marketName}`; body = `${e.size || ''}. ${e.pointsLine || ''}`; }
@@ -722,7 +729,7 @@ function eventHtml(e) {
   else if (e.type === 'failed') { title = `Could not execute ${e.marketName || 'a trade'}`; body = e.text; }
   const reason = e.reason ? `<div class="es"><b style="color:var(--text)">Reason:</b> ${clean(e.reason)}</div>` : '';
   const meta = [e.model ? `SERV ${esc(e.model)}` : '', e.priceImpact != null ? `impact ${(e.priceImpact * 100).toFixed(2)}%` : '', e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">tx ${esc(String(e.hash || '').slice(0, 10))}…</a>` : ''].filter(Boolean).join(' · ');
-  return `<div class="evt ${esc(e.type)}"><span class="ei">${EVT_ICON[e.type] || '•'}</span><div><div class="et">${clean(title)}</div>${body && e.type !== 'rule' ? `<div class="es">${clean(body)}</div>` : ''}${reason}${meta ? `<div class="em">${meta}</div>` : ''}</div><span class="ea">${ago(e.at)}</span></div>`;
+  return `<div class="evt ${esc(e.type)}"><span class="ei">${ic(EVT_ICON[e.type] || 'scan')}</span><div><div class="et">${clean(title)}</div>${body && e.type !== 'rule' ? `<div class="es">${clean(body)}</div>` : ''}${reason}${meta ? `<div class="em">${meta}</div>` : ''}</div><span class="ea">${ago(e.at)}</span></div>`;
 }
 function ledgerHtml(rows) {
   return `<table class="ledger"><thead><tr><th>Position</th><th>Cost</th><th>Value</th><th>Est. points</th></tr></thead><tbody>${rows.map(p => `<tr><td>${esc(p.name)}<div class="faint" style="font-size:11px;font-weight:500">${esc((p.entry && (p.entry.program || p.entry.status)) || '')} · held ${p.daysHeld}d</div></td><td>${usd(p.costUsd)}</td><td>${p.valueUsd == null ? 'n/a' : usd(p.valueUsd)}</td><td>${p.pointsEst == null ? 'rate unknown' : compact(p.pointsEst)}</td></tr>`).join('')}</tbody></table>`;
@@ -733,7 +740,7 @@ function checkHtml(r) {
   const title = acted ? `Checked and acted: ${acted} action${acted === 1 ? '' : 's'}` : 'Checked the markets: nothing to do yet';
   const who = r.source === 'cron' ? 'on its own' : r.source === 'owner' || r.source === 'user' ? 'you woke it' : esc(r.source || '');
   const lines = (r.lines || []).slice(0, 2).map(l => `<div class="es">${clean(l)}</div>`).join('');
-  return `<div class="evt check${acted ? ' acted' : ''}"><span class="ei">◌</span><div><div class="et">${title}</div>${lines}<div class="em">${who}</div></div><span class="ea">${ago(r.at)}</span></div>`;
+  return `<div class="evt check${acted ? ' acted' : ''}"><span class="ei">${ic(acted ? 'check' : 'scan')}</span><div><div class="et">${title}</div>${lines}<div class="em">${who}</div></div><span class="ea">${ago(r.at)}</span></div>`;
 }
 const timelineOf = (events, runs, render) => [...events.map(e => ({ at: e.at, html: render(e) })), ...runs.map(r => ({ at: r.at, html: checkHtml(r) }))]
   .sort((x, y) => Date.parse(y.at) - Date.parse(x.at)).slice(0, 50).map(x => x.html).join('');
@@ -787,14 +794,14 @@ function renderMyActivity(root) {
     <div class="stat"><div class="v">${count('held')}</div><div class="k">Held by SERV</div></div>
     <div class="stat"><div class="v">${runs.length}</div><div class="k">Recent checks</div></div>
   </div>
-  ${quiet ? `<div class="callout calm"><span class="ic">◌</span><div><b>Your agent is watching, not trading yet.</b> ${active.map(r => `${esc(shortRule(r))}: ${clean(r.lastResult || 'not checked yet')}`).join(' ')} It trades only when a rule is met and SERV Reasoning agrees.</div></div>` : ''}
+  ${quiet ? `<div class="callout calm"><span class="ic">${ic('scan', 18)}</span><div><b>Your agent is watching, not trading yet.</b> ${active.map(r => `${esc(shortRule(r))}: ${clean(r.lastResult || 'not checked yet')}`).join(' ')} It trades only when a rule is met and SERV Reasoning agrees.</div></div>` : ''}
   <div class="agent-grid">
     <div class="card panel"><h3>Timeline <a class="btn soft xs" href="#/my">Watch it live</a></h3><p class="sub">Newest first, including checks where nothing needed doing.</p>${ev.length || runs.length ? `<div class="timeline">${timelineOf(ev, runs, myEventHtml)}</div>` : '<div class="empty"><img src="/art/empty-state.svg" alt=""><b>No checks yet</b>Arm a rule on My agent, then press Wake my agent.</div>'}</div>
     <div>
       <div class="card panel"><h3>Practice portfolio</h3><p class="sub">Marked to Pendle's live YT prices. Practice results, not a promise of real ones.</p>
         ${st.positions.length ? `<table class="ledger"><thead><tr><th>Position</th><th>Cost</th><th>Value</th><th>P&amp;L</th></tr></thead><tbody>${st.positions.map(x => `<tr><td>${esc(x.name)}<div class="faint" style="font-size:11px;font-weight:500">${esc(x.chainName)}</div></td><td>${usd(x.costUsd)}</td><td>${x.valueUsd == null ? 'n/a' : usd(x.valueUsd)}</td><td style="color:${(x.pnlUsd || 0) >= 0 ? 'var(--lime)' : 'var(--hi)'}">${x.pnlPct == null ? 'n/a' : `${x.pnlPct >= 0 ? '+' : ''}${x.pnlPct}%`}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:18px"><b>No positions yet</b>Your agent opens one when a rule fires and SERV confirms.</div>'}
       </div>
-      <div class="card panel" style="margin-top:14px"><h3>Rules it is watching</h3><div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">⚑</span><div><div class="d">${esc(shortRule(r))}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span></div></div>`).join('') : '<p class="help">No rules yet. <a class="linkish" href="#/my">Arm one on My agent</a>.</p>'}</div></div>
+      <div class="card panel" style="margin-top:14px"><h3>Rules it is watching</h3><div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">${ic('flag')}</span><div><div class="d">${esc(shortRule(r))}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span></div></div>`).join('') : '<p class="help">No rules yet. <a class="linkish" href="#/my">Arm one on My agent</a>.</p>'}</div></div>
     </div>
   </div>`;
 }
@@ -833,16 +840,16 @@ function askSuggestions() {
   const rh = (state.data ? state.data.markets : []).filter(m => m.chainId === RH && !m.distorted).sort((a, b) => formed(b) - formed(a) || b.liquidityUsd - a.liquidityUsd);
   const named = rh.find(m => /NVDA/i.test(m.name)) || rh[0];
   return [
-    { i: '↘', q: 'Which YTs are near their floor right now?' },
-    { i: '↗', q: 'Where is the most room to run with a month or more left?' },
-    { i: '◉', q: `Is YT-${named ? named.name : 'NVDA'} a good entry right now?` },
-    { i: '⛓', q: 'Anything on Robinhood Chain worth watching?', chain: String(RH) },
-    { i: '✦', q: 'Where are points cheapest to farm right now?' },
+    { i: 'down', q: 'Which YTs are near their floor right now?' },
+    { i: 'up', q: 'Where is the most room to run with a month or more left?' },
+    { i: 'target', q: `Is YT-${named ? named.name : 'NVDA'} a good entry right now?` },
+    { i: 'link', q: 'Anything on Robinhood Chain worth watching?', chain: String(RH) },
+    { i: 'spark', q: 'Where are points cheapest to farm right now?' },
   ];
 }
 function renderSuggestions() {
   if (!$('#askSugg')) return;
-  $('#askSugg').innerHTML = askSuggestions().map((x, i) => `<button type="button" data-sugg="${i}"><i>${x.i}</i>${esc(x.q)}</button>`).join('');
+  $('#askSugg').innerHTML = askSuggestions().map((x, i) => `<button type="button" data-sugg="${i}">${ic(x.i, 15)}${esc(x.q)}</button>`).join('');
   const r = askRecent();
   $('#askRecent').innerHTML = r.length ? `<span>Your recent questions</span>${r.slice(0, 4).map(x => `<button type="button" data-recent="${esc(x.id)}" title="${esc(x.q)}">${esc(x.q)}</button>`).join('')}` : '';
 }
@@ -1221,13 +1228,13 @@ async function shareLink(id) {
 /* ---------- account menu ---------- */
 function acctMenuHtml() {
   const addr = (state.me && state.me.address) || state.wallet.address;
-  const icon = state.wallet.info && state.wallet.info.icon ? `<img src="${esc(state.wallet.info.icon)}" alt="">` : '<span class="am-ic">◆</span>';
+  const icon = state.wallet.info && state.wallet.info.icon ? `<img src="${esc(state.wallet.info.icon)}" alt="">` : `<span class="am-ic">${ic('wallet', 17)}</span>`;
   return `<div class="am-head">${icon}<div><b>${esc(shortAddr(addr))}</b><span>${state.me ? 'Signed in. Your agent keeps working while you are away.' : 'Wallet connected. No agent yet.'}</span></div></div>
-    ${state.me ? '<a class="am-item" href="#/my"><i>◉</i>My agent</a>' : '<button class="am-item" data-am="create"><i>◉</i>Create my free agent</button>'}
-    <a class="am-item" href="#/ask"><i>✦</i>Ask BANDIT</a>
-    <button class="am-item" data-am="copy"><i>⧉</i>Copy address</button>
-    <button class="am-item" data-am="switch"><i>⇄</i>Use a different wallet</button>
-    <button class="am-item danger" data-am="disconnect"><i>⏻</i>Disconnect</button>`;
+    ${state.me ? `<a class="am-item" href="#/my">${ic('user')}My agent</a>` : `<button class="am-item" data-am="create">${ic('user')}Create my free agent</button>`}
+    <a class="am-item" href="#/ask">${ic('spark')}Ask BANDIT</a>
+    <button class="am-item" data-am="copy">${ic('copy')}Copy address</button>
+    <button class="am-item" data-am="switch">${ic('swap')}Use a different wallet</button>
+    <button class="am-item danger" data-am="disconnect">${ic('power')}Disconnect</button>`;
 }
 function toggleMenu(force) {
   const menu = $('#acctMenu'); if (!menu) return;
@@ -1821,7 +1828,7 @@ function updateRuleSay() {
 }
 
 function myEventHtml(e) {
-  const icon = { paper: '◌', approval: '✍', held: '⏸', rule: '⚑' }[e.type] || '•';
+  const icon = ic({ paper: 'check', approval: 'pen', held: 'pause', rule: 'flag' }[e.type] || 'scan');
   let title = e.text || e.type, body = '';
   if (e.type === 'paper') { title = e.text; body = e.headline || ''; }
   if (e.type === 'held') { title = `SERV held off on ${e.marketName}`; body = e.headline || ''; }
@@ -1887,7 +1894,7 @@ function renderMy() {
       <div class="card panel">
         <h3>My rules</h3>
         <p class="sub">Up to 5 active rules. Each one fires once, then you can arm the next.</p>
-        <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">⚑</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span><button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
+        <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">${ic('flag')}</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span><button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
         ${myRuleBuilderHtml()}
       </div>
     </div>

@@ -8,7 +8,7 @@
   --line-strong:rgba(234,238,218,.15);
   --text:#F1F2E8;
   --text-2:#A7AB9A;
-  --text-3:#6E7263;
+  --text-3:#868B7A;
   --lime:#C8F25A;
   --lime-ink:#12160A;
   --lime-dim:rgba(200,242,90,.12);
@@ -938,3 +938,18 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opac
 .br-row.total{padding-top:8px;border-top:1px dashed var(--line-strong)}
 .br-row.total b{color:var(--lime)}
 .br-quote{min-height:0}
+
+/* icon set */
+svg.i{display:block;flex-shrink:0}
+.evt .ei svg.i,.rule .ico svg.i{width:17px;height:17px}
+.am-item svg.i{color:var(--text-3)}
+.am-item.danger svg.i{color:var(--err)}
+.am-head .am-ic{display:grid;place-items:center}
+.sugg button svg.i{color:var(--lime)}
+.weigh .wi svg.i,.topup-strip .ic svg.i,.hero .art .float .ic svg.i{width:18px;height:18px}
+.callout .ic svg.i{margin-top:1px}
+
+/* page transitions */
+::view-transition-old(root),::view-transition-new(root){animation-duration:.24s;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+@media (prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}
+.why-grid .why i svg.i{width:12px;height:12px}

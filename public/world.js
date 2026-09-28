@@ -43,6 +43,17 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
   const ctx = canvas.getContext('2d');
   const imgs = {};
   for (const [k, src] of [['mascot', mascot], ['logo', logo]]) { const i = new Image(); i.onload = () => { imgs[k] = i; }; i.src = src; }
+  // Expressions: swap the eyes in the mascot SVG. Blob URLs keep the canvas clean for recording.
+  const EYES = {
+    closed: '<path d="M96 63.5Q105 72 114 63.5M46 63.5Q55 72 64 63.5" stroke="#F4F1DE" stroke-width="3.4" stroke-linecap="round"/>',
+    happy: '<path d="M96.5 69Q105 58 113.5 69M46.5 69Q55 58 63.5 69" stroke="#F4F1DE" stroke-width="3.6" stroke-linecap="round"/>',
+  };
+  fetch(mascot).then(r => r.text()).then(svg => {
+    for (const [k, eyes] of Object.entries(EYES)) {
+      const i = new Image(); i.onload = () => { imgs[k] = i; };
+      i.src = URL.createObjectURL(new Blob([svg.replace(/<!-- eyes -->[\s\S]*?<!-- nose -->/, `<!-- eyes -->${eyes}<!-- nose -->`)], { type: 'image/svg+xml' }));
+    }
+  }).catch(() => {});
 
   const rnd = seeded(11);
   const stars = Array.from({ length: 170 }, () => ({ x: rnd() * W, y: rnd() * 430, r: rnd() * 1.3 + 0.3, p: rnd() * 6.3, s: 0.5 + rnd() * 1.8 }));
@@ -55,7 +66,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     bubble: null, caption: null, active: null, flashI: 0, flashAt: 0, flashList: null, ruleHit: false,
     orb: 'idle', blocks: 3, drop: null, plane: null, ticket: null, coins: [], sparks: [], shoot: null,
     hud: { label: 'BANDIT agent', sub: '', nextAt: null, last: null, rules: [] }, title: null, rec: null,
-    token: 0, playing: false, dead: false, tickerX: 0,
+    token: 0, playing: false, dead: false, tickerX: 0, expr: 'normal', exprUntil: 0, blinkAt: 2, blinkUntil: 0,
   };
   let raf = requestAnimationFrame(frame);
 
@@ -85,6 +96,8 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     if (!S.shoot && Math.random() < dt / 9) S.shoot = { t0: S.t, x: 200 + Math.random() * 800, y: 40 + Math.random() * 120 };
     if (S.shoot && S.t - S.shoot.t0 > 1.1) S.shoot = null;
     S.tickerX += dt * 46;
+    if (S.t > S.blinkAt) { S.blinkUntil = S.t + 0.14; S.blinkAt = S.t + 2.2 + Math.random() * 3.2; }
+    if (S.exprUntil && S.t > S.exprUntil) { S.expr = 'normal'; S.exprUntil = 0; }
   }
 
   /* ---------- drawing ---------- */
@@ -263,7 +276,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     if (!img) return;
     if (S.mode === 'sleep') {
       const x = STATIONS.home.x, breath = Math.sin(S.t * 1.8) * 1.2;
-      ctx.save(); ctx.translate(x - 2, GROUND - 66 + breath); ctx.rotate(-1.42); ctx.drawImage(img, -36, -40, 72, 72); ctx.restore();
+      ctx.save(); ctx.translate(x - 2, GROUND - 66 + breath); ctx.rotate(-1.42); ctx.drawImage(imgs.closed || img, -36, -40, 72, 72); ctx.restore();
       for (let i = 0; i < 3; i++) { const ph = (S.t * 0.42 + i / 3) % 1; txt('z', x + 26 + ph * 30 + i * 3, GROUND - 104 - ph * 54, 11 + i * 5, FONT.brand, hexA(C.cream, (1 - ph) * 0.85), 'left', 700); }
       return;
     }
@@ -271,8 +284,14 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     const bob = walking ? -Math.abs(Math.sin(S.t * 11)) * 7 : Math.sin(S.t * 3) * 1.2;
     const jy = S.jump ? -Math.sin(clamp((S.t - S.jump.t0) / S.jump.dur, 0, 1) * Math.PI) * 46 : 0;
     ctx.save(); ctx.translate(S.x, GROUND + 6); ctx.scale(1, 0.22); ctx.beginPath(); ctx.arc(0, 0, 30 - Math.min(12, -jy / 4), 0, 6.3); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(S.x, GROUND + 6 + bob + jy); ctx.scale(S.face, 1); if (walking) ctx.rotate(Math.sin(S.t * 11) * 0.05);
-    ctx.drawImage(img, -48, -96, 96, 96); ctx.restore();
+    const blinking = S.t < S.blinkUntil && S.expr !== 'happy';
+    const sprite = (blinking && imgs.closed) || (S.expr === 'happy' && imgs.happy) || img;
+    const sq = walking ? Math.sin(S.t * 22) * 0.035 : S.expr === 'happy' ? Math.abs(Math.sin(S.t * 9)) * 0.05 : 0;
+    ctx.save(); ctx.translate(S.x, GROUND + 6 + bob + jy); ctx.scale(S.face * (1 + sq), 1 - sq); if (walking) ctx.rotate(Math.sin(S.t * 11) * 0.05);
+    ctx.drawImage(sprite, -48, -96, 96, 96); ctx.restore();
+    const hx = S.x + S.face * 34, hy = GROUND - 84 + bob + jy;
+    if (S.orb === 'thinking' && S.active === 'serv') for (let i = 0; i < 3; i++) { const a = 0.35 + 0.65 * Math.max(0, Math.sin(S.t * 6 - i * 0.9)); ctx.fillStyle = hexA(C.cream, a); ctx.beginPath(); ctx.arc(hx + S.face * (i * 9), hy - 12 - i * 8, 2.6 + i * 1.3, 0, 6.3); ctx.fill(); }
+    if (S.expr === 'worried') { const dy = (S.t * 18) % 14; ctx.fillStyle = hexA('#8FD3FF', 0.9 - dy / 20); ctx.beginPath(); ctx.moveTo(hx, hy - 6 + dy); ctx.quadraticCurveTo(hx + 5, hy + 3 + dy, hx, hy + 6 + dy); ctx.quadraticCurveTo(hx - 5, hy + 3 + dy, hx, hy - 6 + dy); ctx.fill(); }
   }
   function coinBurst(x, y, n) { for (let i = 0; i < n; i++) S.coins.push({ x, y, vx: (Math.random() - 0.5) * 320, vy: -220 - Math.random() * 260, life: 1.6 + Math.random() * 0.6, r: 4 + Math.random() * 3 }); }
   function sparkBurst(x, y, color) { for (let i = 0; i < 26; i++) { const a = Math.random() * 6.3, v = 60 + Math.random() * 160; S.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.9 + Math.random() * 0.5, color }); } }
@@ -407,6 +426,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
   /* ---------- choreography ---------- */
   const say = (text, tone = '') => { S.bubble = { text: undash(text), tone, t0: S.t }; };
   const cap = (stage, text, tone = '') => { S.caption = { stage, text: undash(text), tone }; };
+  const feel = (expr, secs = 2.6) => { S.expr = expr; S.exprUntil = S.t + secs; };
   function walkTo(key) {
     const tx = key === 'home' ? STATIONS.home.x : STATIONS[key].x - 66;
     if (Math.abs(tx - S.x) < 3) { S.mode = 'act'; return Promise.resolve(); }
@@ -423,7 +443,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     S.active = null; S.orb = 'idle';
     await walkTo('home');
     if (token !== S.token) return;
-    S.mode = 'sleep'; S.bubble = null; S.caption = null; S.flashList = null; S.ticket = null; S.ruleHit = false;
+    S.mode = 'sleep'; S.bubble = null; S.caption = null; S.flashList = null; S.ticket = null; S.ruleHit = false; S.expr = 'normal';
   }
   const dwellFor = s => clamp(1000 + String(s || '').length * 30, 1900, 4800);
   async function act(step) {
@@ -434,7 +454,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
         say('Scanning the Pendle markets…'); cap('scan', text);
         await sleep(clamp(900 + (S.flashList.length || 5) * 200, 2200, 3600)); break;
       case 'rule':
-        S.active = 'rules'; S.ruleHit = Boolean(step.hit);
+        S.active = 'rules'; S.ruleHit = Boolean(step.hit); if (step.hit) feel('happy', 1.6);
         say(text, step.hit ? 'ok' : ''); cap('rule', text, step.hit ? 'ok' : ''); await sleep(dwellFor(text)); break;
       case 'quote':
         S.active = 'quote'; S.ticket = { text: (text.match(/[\d.,]+\s*ETH[^.]*/) || [text])[0], t0: S.t };
@@ -444,14 +464,14 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
       case 'decision': {
         const ok = step.ok !== false;
         S.active = 'serv'; S.orb = ok ? 'ok' : 'no';
-        sparkBurst(STATIONS.serv.x, GROUND - 178, ok ? C.lime : C.hi);
+        sparkBurst(STATIONS.serv.x, GROUND - 178, ok ? C.lime : C.hi); feel(ok ? 'happy' : 'worried', 3.2);
         say(`${ok ? 'SERV says go.' : 'SERV says hold off.'} ${undash(step.reason || '')}`, ok ? 'ok' : 'no');
         cap('decision', text, ok ? 'ok' : 'no');
         await sleep(clamp(dwellFor(step.reason) + 500, 2600, 5400)); break;
       }
       case 'exec': {
         const ok = step.ok !== false;
-        S.active = 'chain'; if (ok) S.drop = { t0: S.t };
+        S.active = 'chain'; if (ok) { S.drop = { t0: S.t }; feel('happy', 2.6); } else feel('worried', 2.6);
         say(text, ok ? 'ok' : 'no'); cap('exec', text, ok ? 'ok' : 'no'); await sleep(dwellFor(text)); break;
       }
       case 'telegram':
