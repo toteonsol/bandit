@@ -21,7 +21,7 @@
 <link rel="alternate icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@400..700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -37,7 +37,7 @@
     <a href="#/ask" data-route="ask">Ask BANDIT</a>
     <a href="#/my" data-route="my">My agent</a>
     <a href="#/agent" data-route="agent"><i class="dot" id="tabAgentDot"></i>Live agent</a>
-    <a href="#/receipts" data-route="receipts">Receipts</a>
+    <a href="#/receipts" data-route="receipts">Activity</a>
   </nav>
   <div class="spacer"></div>
   <div class="pill-live" id="livePill"><i></i><span id="liveText">CONNECTING</span></div>
@@ -192,9 +192,14 @@
     <div id="agentRoot"></div>
   </section>
 
-  <!-- RECEIPTS -->
-  <section class="view" id="view-receipts" aria-label="Receipts">
+  <!-- ACTIVITY -->
+  <section class="view" id="view-receipts" aria-label="Activity">
     <div id="receiptsRoot"></div>
+  </section>
+
+  <!-- STREAM: the Agent World alone, full window -->
+  <section class="view" id="view-stream" aria-label="Agent stream">
+    <div id="streamRoot"></div>
   </section>
 
   <footer class="foot">
@@ -208,16 +213,23 @@
 </main>
 
 <nav class="tabbar" aria-label="Primary">
-  <a href="#/" data-route="farm"><span class="ti">✦</span>Home</a>
-  <a href="#/bands" data-route="bands"><span class="ti">≋</span>Markets</a>
+  <a href="#/" data-route="farm"><span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.2 12 3.5l8.5 6.7V19a1.5 1.5 0 0 1-1.5 1.5h-4.2v-5.8H9.2v5.8H5A1.5 1.5 0 0 1 3.5 19z"/></svg></span>Home</a>
+  <a href="#/bands" data-route="bands"><span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg></span>Markets</a>
   <a href="#/ask" data-route="ask" class="tb-ask"><span class="tb-orb"><img src="/art/mascot.svg" alt=""></span>Ask</a>
-  <a href="#/my" data-route="my"><span class="ti">◉</span>My agent</a>
-  <a href="#/agent" data-route="agent"><span class="ti">☾</span>Live</a>
+  <a href="#/my" data-route="my"><span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg></span>My agent</a>
+  <a href="#/agent" data-route="agent"><span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19a10 10 0 0 1 0-14"/></svg></span>Live</a>
 </nav>
 
 <button class="fab" id="fab" aria-label="Ask BANDIT"><img src="/art/mascot.svg" alt=""><span>Ask BANDIT</span></button>
 
 <div class="scrim" id="scrim"></div>
+
+<!-- Clip it: record the Agent World as a video -->
+<div class="modal wide" id="clipModal" role="dialog" aria-modal="true" aria-labelledby="clipTitle">
+  <h3 id="clipTitle">Clip your agent</h3>
+  <div id="clipBody"></div>
+  <div class="acts share-acts" id="clipActs"></div>
+</div>
 
 <!-- Top up Robinhood Chain (Relay) -->
 <aside class="sheet" id="bridgeSheet" aria-label="Top up Robinhood Chain">

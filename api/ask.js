@@ -99,6 +99,7 @@ function plainRead(m) {
   const b = m.band, d = Math.min(90, b.days || 0);
   const where = b.status !== 'formed' ? `too new to judge: ${b.days} days of price history, BANDIT needs 14`
     : b.percentile >= 97 ? `at its ${d}-day high`
+    : b.percentile <= 3 ? `at its ${d}-day low`
     : b.percentile > 50 ? `pricier than ${Math.round(b.percentile)}% of its last ${d} days`
     : `cheaper than ${100 - Math.round(b.percentile)}% of its last ${d} days`;
   return {

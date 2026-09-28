@@ -55,24 +55,28 @@ function toast(text, kind = '') {
 /* ---------- router ---------- */
 function route() {
   const h = location.hash.replace(/^#\/?/, '').split('?')[0];
-  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my', ask: 'ask' }[h] || 'farm';
+  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my', ask: 'ask', stream: 'stream' }[h] || 'farm';
   const changed = r !== state.route;
   state.route = r;
   $$('.view').forEach(v => v.classList.toggle('on', v.id === `view-${r}`));
   $$('[data-route]').forEach(a => a.classList.toggle('on', a.dataset.route === r));
   document.body.classList.toggle('on-ask', r === 'ask');
+  document.body.classList.toggle('on-stream', r === 'stream');
   closeMenu();
   if (h === 'farm-board') setTimeout(() => $('#farm-board').scrollIntoView({ behavior: 'smooth' }), 40);
   const tm = location.hash.match(/^#\/trade\?m=([^&]+)/);
   if (tm) { const id = decodeURIComponent(tm[1]); history.replaceState(null, '', '#/'); const open = () => openTrade(id); state.data ? open() : setTimeout(open, 1500); }
   else if (changed) window.scrollTo({ top: 0 });
-  // Only one Agent Live pipeline lives in the DOM at a time (they share element ids).
+  // Only one Agent World lives in the DOM at a time (they share element ids).
   if (r !== 'agent') $('#agentRoot').innerHTML = '';
   if (r !== 'my') $('#myRoot').innerHTML = '';
+  if (r !== 'stream') $('#streamRoot').innerHTML = '';
+  if (!['agent', 'my', 'stream'].includes(r)) unmountWorld();
   if (r === 'agent') { state.agentSig = ''; renderAgent(); }
   if (r === 'my') { state.meSig = ''; renderMy(); loadMe(); }
-  if (r === 'receipts') renderReceipts();
-  if (r === 'agent' || r === 'receipts') loadAgent();
+  if (r === 'receipts') { renderReceipts(); loadMe(); }
+  if (r === 'stream') renderStream();
+  if (r === 'agent' || r === 'receipts' || r === 'stream') loadAgent();
   if (r === 'ask') renderAskPage();
 }
 window.addEventListener('hashchange', route);
@@ -207,6 +211,7 @@ function entryGrade(m) {
 const gradeBadge = (gr, big = false) => `<span class="grade g-${gr.k}${big ? ' big' : ''}"${gr.score >= 0 ? ` title="Entry score ${gr.score} out of 100"` : ''}>${gr.g}</span>`;
 const whereLine = m => !formed(m) ? `Too new to judge: ${m.band.days} days of history`
   : m.band.percentile >= 97 ? `At its ${span(m)}-day high`
+  : m.band.percentile <= 3 ? `At its ${span(m)}-day low`
   : m.band.percentile > 50 ? `Pricier than ${Math.round(m.band.percentile)}% of its last ${span(m)} days`
   : `Cheaper than ${100 - Math.round(m.band.percentile)}% of its last ${span(m)} days`;
 
@@ -348,11 +353,12 @@ async function loadAgent() {
     const editing = $('#ruleForm') && $('#ruleForm').contains(document.activeElement);
     if (state.route === 'agent' && !state.live.playing && !editing && sig !== state.agentSig) { state.agentSig = sig; renderAgent(); }
     if (state.route === 'receipts') renderReceipts();
+    if (state.route === 'stream' && state.streamKind === 'house') streamTick(a.lastRun);
     updateAgentChrome();
   } catch (e) {
     if (state.route === 'agent' && !state.agent) $('#agentRoot').innerHTML = `<div class="card board-msg">Could not load the agent: ${esc(e.message)}</div>`;
   }
-  if (state.route === 'agent' || state.route === 'receipts') agentTimer = setTimeout(loadAgent, 60_000);
+  if (['agent', 'receipts', 'stream'].includes(state.route)) agentTimer = setTimeout(loadAgent, state.route === 'stream' ? 30_000 : 60_000);
 }
 function agentMode(a) {
   if (!a.ready.store || !a.ready.serv || !a.ready.wallet) return { cls: 'setup', text: 'Setting up' };
@@ -369,21 +375,8 @@ function updateAgentChrome() {
   $('#floatAgentSub').textContent = a.lastRun ? `last check ${ago(a.lastRun.at)}` : 'checks on a schedule';
 }
 
-const NODES = [
-  { icon: '◎', label: 'Markets' },
-  { icon: '⚑', label: 'Rules' },
-  { icon: '⇄', label: 'Pendle quote' },
-  { icon: '✦', label: 'SERV Reasoning' },
-  { icon: '⛓', label: 'Robinhood Chain' },
-  { icon: '✈', label: 'Telegram' },
-];
-const STAGE_NODE = { scan: 0, rule: 1, quote: 2, serv: 3, decision: 3, exec: 4, telegram: 5 };
+/* ---------- Agent World host: the live animated view of an agent's runs ---------- */
 const STAGE_LABEL = { scan: 'scan', rule: 'rule', quote: 'quote', serv: 'serv', decision: 'verdict', exec: 'chain', telegram: 'telegram', done: 'done' };
-
-function pipelineHtml() {
-  const wires = NODES.slice(0, -1).map((_, i) => `<div class="wire" data-w="${i}" style="left:calc(${(i + 0.5) * (100 / 6)}% + 36px);width:calc(${100 / 6}% - 72px)"><i></i></div>`).join('');
-  return `<div class="pipeline" id="pipe">${wires}${NODES.map((n, i) => `<div class="node${i === 0 ? ' scan-orb' : ''}" data-n="${i}"><div class="orb">${n.icon}</div><div class="nl">${n.label}</div><div class="ns" data-ns="${i}"></div></div>`).join('')}</div>`;
-}
 function consoleLine(s) {
   const bad = s.ok === false;
   const cls = s.stage === 'decision' ? (bad ? 'bad' : 'decision') : (s.stage === 'exec' && bad) ? 'bad' : s.stage;
@@ -391,137 +384,160 @@ function consoleLine(s) {
   const link = s.url ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">View tx</a>` : '';
   return `<div class="ln"><span class="st ${cls}">${STAGE_LABEL[s.stage] || esc(s.stage)}</span><div class="lt">${clean(s.text)}${link}${reason}</div></div>`;
 }
-function nodeStatus(s) {
-  switch (s.stage) {
-    case 'scan': return 'scanned';
-    case 'rule': return s.hit ? 'triggered' : 'waiting';
-    case 'quote': return 'quoted';
-    case 'serv': return 'thinking';
-    case 'decision': return s.ok === false ? 'held off' : 'confirmed';
-    case 'exec': return s.ok === false ? 'failed' : s.url ? 'onchain' : 'simulated';
-    case 'telegram': return 'pinged';
-    default: return '';
+const ICON = {
+  full: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  rec: '<svg viewBox="0 0 24 24" width="15" height="15"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>',
+  play: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+};
+let world = null, worldKind = null;
+const worldSeen = { me: null, house: null };
+let wlKey = null, wlCache = [];
+// The markets the world shows on its board and ticker, best entry grades first (cached per data refresh).
+function worldList() {
+  if (!state.data) return [];
+  if (wlKey === state.data.updatedAt) return wlCache;
+  wlKey = state.data.updatedAt;
+  wlCache = state.data.markets.filter(m => !m.distorted).map(m => ({ m, gr: entryGrade(m) })).sort((a, b) => b.gr.score - a.gr.score)
+    .map(({ m, gr }) => ({ name: `YT-${m.name}`, p: formed(m) ? m.band.percentile : null, g: gr.g, room: m.range ? (m.range.toHigh > 0.005 ? upPct(m.range.toHigh) : 'at its high') : 'too new' }));
+  return wlCache;
+}
+// Scheduled checks: the house agent at :00, :10, :20 and so on; personal agents at :05, :15, :25.
+function nextCheck(offset) {
+  const d = new Date(), m = d.getUTCMinutes();
+  d.setUTCMinutes(m + ((((offset - m) % 10) + 10) % 10 || 10), 0, 0);
+  return d.getTime();
+}
+const shortRule = r => r.kind === 'farm' ? 'Farm mode: cheapest points'
+  : r.trigger ? `${r.action === 'exit' ? 'Sell' : `Buy $${r.sizeUsd}`} YT-${String(r.marketName || '').replace(/^YT-/, '').split(' (')[0]} when ${r.trigger.dir === 'below' ? 'cheap' : 'pricey'}`
+  : undash(r.description || '');
+const runOutcome = run => (run.actions || []).length ? `${run.actions.length} action${run.actions.length === 1 ? '' : 's'}` : 'nothing to do';
+const worldRun = () => worldKind === 'me' ? state.meStatus && state.meStatus.lastRun : state.agent && state.agent.lastRun;
+const worldHtml = () => `<div class="world-wrap" id="worldWrap"><canvas id="world" role="img" aria-label="Live animated view of the agent at work"></canvas><div class="rec-badge"><i></i>REC <span id="recT">0:00</span></div><button class="world-exit" id="wExit" aria-label="Exit stream view">×</button></div>`;
+const worldButtons = () => `<button class="btn soft sm" id="wReplay">${ICON.play} Replay last run</button><button class="btn soft sm" id="wFull">${ICON.full} Stream view</button><button class="btn soft sm" id="wClip">${ICON.rec} Clip it</button>`;
+
+function updateWorldHud() {
+  if (!world) return;
+  if (worldKind === 'me' && state.me) {
+    const st = state.meStatus, active = st ? st.rules.filter(r => r.status === 'active') : [];
+    world.setHud({
+      label: `Your agent · ${shortAddr(state.me.address)}`, sub: 'Practice money · SERV Reasoning checks every move',
+      nextAt: active.length ? nextCheck(5) : null, rules: active.map(shortRule),
+      last: st && st.lastRun ? `${ago(st.lastRun.at)}: ${runOutcome(st.lastRun)}.` : null,
+    });
+  } else if (state.agent) {
+    const a = state.agent;
+    world.setHud({
+      label: 'BANDIT house agent', sub: `${agentMode(a).text} · Robinhood Chain`, nextAt: nextCheck(0),
+      rules: a.rules.filter(r => r.kind !== 'alert' && r.status === 'active').map(shortRule),
+      last: a.lastRun ? `${ago(a.lastRun.at)}: ${runOutcome(a.lastRun)}.` : null,
+    });
   }
 }
-function resetPipeline() {
-  $$('#pipe .node').forEach(n => n.classList.remove('active', 'done', 'bad', 'hold'));
-  $$('#pipe [data-ns]').forEach(n => { n.textContent = ''; });
-  $$('#pipe .wire').forEach(w => w.classList.remove('flow', 'lit'));
-  const strip = $('#mktStrip'); if (strip) strip.innerHTML = '';
+async function mountWorld(kind) {
+  const cv = $('#world'); if (!cv) return;
+  if (world) { world.destroy(); world = null; }
+  const { createWorld } = await import('/world.js');
+  if ($('#world') !== cv) return; // the page re-rendered while the module loaded
+  world = createWorld(cv, { markets: worldList });
+  worldKind = kind;
+  updateWorldHud();
+  const run = worldRun();
+  if (!run || !run.steps || !run.steps.length) return;
+  // Each new run plays once as it arrives; after that the world rests and counts down to the next check.
+  if (run.at !== worldSeen[kind]) { worldSeen[kind] = run.at; playRun(run); }
+  else showRunStatic(run);
 }
-function setNode(i, s) {
-  const nodes = $$('#pipe .node');
-  nodes.forEach((n, j) => { if (j !== i && n.classList.contains('active')) { n.classList.remove('active'); n.classList.add('done'); } });
-  const n = nodes[i]; if (!n) return;
-  n.classList.remove('done', 'bad', 'hold'); n.classList.add('active');
-  if (s && s.ok === false) n.classList.add(s.stage === 'decision' ? 'hold' : 'bad');
-  const ns = $(`#pipe [data-ns="${i}"]`); if (ns && s) ns.textContent = nodeStatus(s);
-}
-function flowWires(from, to) {
-  for (let w = from; w < to; w++) {
-    const el = $(`#pipe .wire[data-w="${w}"]`);
-    if (el) { el.classList.remove('flow'); void el.offsetWidth; el.classList.add('flow', 'lit'); }
-  }
-}
-function drawStrip(markets, flash) {
-  const el = $('#mktStrip'); if (!el) return;
-  el.innerHTML = (markets || []).map((m, i) => `<span class="${m.distorted ? 'dist' : ''}${i === flash ? ' flash' : ''}">${esc(m.name)} ${m.percentile == null ? '· forming' : 'P' + Math.round(m.percentile)}</span>`).join('');
-}
+function unmountWorld() { if (world) { world.destroy(); world = null; } }
 function showRunStatic(run) {
-  if (!$('#pipe')) return;
-  resetPipeline();
-  const steps = run.steps || [];
-  $('#console').innerHTML = steps.map(consoleLine).join('') || '<div class="empty">No steps recorded.</div>';
-  const scan = steps.find(s => s.stage === 'scan'); if (scan) drawStrip(scan.markets, -1);
-  let last = -1;
-  steps.forEach(s => {
-    const i = STAGE_NODE[s.stage]; if (i == null) return;
-    const n = $$('#pipe .node')[i];
-    n.classList.add('done'); n.classList.remove('hold', 'bad');
-    if (s.ok === false) n.classList.add(s.stage === 'decision' ? 'hold' : 'bad');
-    const ns = $(`#pipe [data-ns="${i}"]`); if (ns) ns.textContent = nodeStatus(s);
-    last = Math.max(last, i);
-  });
-  for (let w = 0; w < last; w++) $(`#pipe .wire[data-w="${w}"]`)?.classList.add('lit');
-  const decision = [...steps].reverse().find(s => s.stage === 'decision');
-  if (decision) { const [t, tone, sub] = bubbleFor(decision); say(t, tone, `Last run ${ago(run.at)}${sub ? ` · ${sub}` : ''}`); }
+  const con = $('#console');
+  if (con) con.innerHTML = (run.steps || []).map(consoleLine).join('') || '<div class="empty">No steps recorded.</div>';
+  updateWorldHud();
 }
-const DELAY = { scan: 1300, rule: 1000, quote: 1100, serv: 1700, decision: 1900, exec: 1500, telegram: 1100, done: 500 };
 async function playRun(run) {
-  const token = ++state.live.token;
+  const con = $('#console');
+  if (con) con.innerHTML = '';
   state.live.playing = true;
-  wake(true);
-  resetPipeline();
-  const con = $('#console'); if (!con) return;
-  con.innerHTML = '';
-  let prev = -1;
-  for (const s of run.steps || []) {
-    if (token !== state.live.token) return;
-    const i = STAGE_NODE[s.stage];
-    if (i != null) {
-      if (prev >= 0 && i > prev) { flowWires(prev, i); await sleep(420); }
-      setNode(i, s); prev = i;
-    }
-    if (s.stage === 'scan' && s.markets) { for (let k = 0; k < s.markets.length; k++) { if (token !== state.live.token) return; drawStrip(s.markets, k); await sleep(180); } drawStrip(s.markets, -1); }
-    say(...bubbleFor(s));
-    con.insertAdjacentHTML('beforeend', consoleLine(s));
-    con.scrollTop = con.scrollHeight;
-    await sleep(DELAY[s.stage] || 900);
+  try {
+    if (world) await world.play(run, { onStep: s => { const c = $('#console'); if (c) { c.insertAdjacentHTML('beforeend', consoleLine(s)); c.scrollTop = c.scrollHeight; } } });
+    else if (con) con.innerHTML = (run.steps || []).map(consoleLine).join('');
+  } finally {
+    state.live.playing = false;
+    updateWorldHud();
   }
-  if (token !== state.live.token) return;
-  $$('#pipe .node.active').forEach(n => { n.classList.remove('active'); n.classList.add('done'); });
-  state.live.playing = false;
-  setTimeout(() => { if (token === state.live.token) wake(false); }, 1800);
 }
+const wakingLine = '<div class="ln"><span class="st scan">scan</span><div class="lt">Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>';
 async function runNow() {
   const btns = ['#runNow', '#runNow2'].map(s => $(s)).filter(Boolean);
   btns.forEach(b => { b.disabled = true; });
-  const token = ++state.live.token;
-  state.live.playing = true;
-  wake(true);
-  say('Waking up. Scanning the Pendle markets…');
-  resetPipeline(); setNode(0, { stage: 'scan' });
-  $('#pipe [data-ns="0"]').textContent = 'scanning';
-  $('#console').innerHTML = '<div class="ln"><span class="st scan">scan</span><div class="lt">Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>';
-  const hint = setTimeout(() => {
-    if (token !== state.live.token) return;
-    flowWires(0, 3); setNode(3, { stage: 'serv' }); say('Let me ask SERV Reasoning about this one…');
-    $('#console').insertAdjacentHTML('beforeend', '<div class="ln"><span class="st serv">serv</span><div class="lt">SERV Reasoning is weighing the numbers<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>');
-  }, 2800);
+  if (world) world.wake();
+  if ($('#console')) $('#console').innerHTML = wakingLine;
   try {
     const run = await api('/api/agent', { method: 'POST', owner: true, body: { action: 'run' } });
-    clearTimeout(hint);
-    state.live.playing = false;
-    if (run.skipped || run.error) { toast(run.skipped || run.error, 'err'); return; }
+    if (run.skipped || run.error) { toast(run.skipped || run.error, 'err'); if (world) world.stop(); return; }
+    worldSeen.house = run.at;
     await playRun(run);
     state.agentSig = '';
     await loadAgent();
   } catch (e) {
-    clearTimeout(hint); state.live.playing = false; toast(e.message, 'err'); resetPipeline(); wake(false); say(`Something went wrong: ${e.message}`, 'no');
+    toast(e.message, 'err'); if (world) world.stop();
   } finally {
     btns.forEach(b => { b.disabled = false; });
   }
 }
-
-function idleLine(a) {
-  if (!a.lastRun) return "Asleep. Arm a rule and I'll check it every 10 minutes.";
-  const acted = (a.lastRun.actions || []).length;
-  return `Asleep. Last check ${ago(a.lastRun.at)}: ${acted ? `${acted} action${acted === 1 ? '' : 's'}` : 'nothing to do'}. Next one within 10 minutes.`;
+function streamWorld() {
+  const wrap = $('#worldWrap'); if (!wrap) return;
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => wrap.classList.add('pseudo-full'));
+  else if (wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen();
+  else wrap.classList.add('pseudo-full');
 }
-function say(text, tone = '', sub = '') {
-  const b = $('#bubble'); if (!b) return;
-  b.className = `bubble ${tone}`;
-  b.innerHTML = `${clean(text)}${sub ? `<small>${clean(sub)}</small>` : ''}`;
+async function openClip() {
+  const run = worldRun();
+  if (!world || !run || !run.steps || !run.steps.length) { toast('Your agent has not run yet. Wake it once, then clip it.', 'err'); return; }
+  const { recordingSupported } = await import('/world.js');
+  $('#clipBody').innerHTML = recordingSupported()
+    ? `<p class="sub">BANDIT replays your agent's latest run with a title and an end card, and records it. Takes about 20 to 40 seconds.</p>
+      <div class="clip-pick"><button class="clip-opt" data-clipfmt="wide"><span class="shape wide"></span><b>Wide 16:9</b><span>X, YouTube, streams</span></button><button class="clip-opt" data-clipfmt="tall"><span class="shape tall"></span><b>Vertical 9:16</b><span>TikTok, Reels, Shorts</span></button></div>`
+    : '<div class="callout" style="margin:0"><span class="ic">!</span><div><b>This browser cannot record the animation.</b> Chrome or Safari on a computer can.</div></div>';
+  $('#clipActs').innerHTML = '<button class="btn soft sm" data-close>Cancel</button>';
+  openLayer('#clipModal');
 }
-function wake(on) {
-  ['#buddy', '#mascot'].forEach(sel => { const el = $(sel); if (el) { el.classList.toggle('awake', on); el.classList.toggle('sleep', !on); } });
+async function recordClip(format) {
+  const run = worldRun();
+  if (!world || !run) return;
+  closeAll();
+  const wrap = $('#worldWrap');
+  wrap.classList.add('recording');
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const t0 = Date.now();
+  const tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); if ($('#recT')) $('#recT').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 500);
+  try {
+    const blob = await world.record({ run, format, title: worldKind === 'me' ? 'My YT agent at work' : 'BANDIT, the YT agent at work' });
+    if (state.clip && state.clip.url) URL.revokeObjectURL(state.clip.url);
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    state.clip = { blob, url: URL.createObjectURL(blob), ext };
+    const file = new File([blob], `bandit-agent.${ext}`, { type: blob.type });
+    const canShare = Boolean(navigator.canShare && navigator.canShare({ files: [file] }));
+    $('#clipBody').innerHTML = `<video class="clip-vid ${format}" src="${state.clip.url}" controls autoplay muted loop playsinline></video>
+      <p class="help" style="margin-top:10px">${ext === 'mp4' ? 'Ready to post. Attach the video to your post on X, TikTok or Instagram.' : 'Saved as WebM. X needs MP4: Chrome 126 or later and Safari record MP4 directly.'}</p>`;
+    $('#clipActs').innerHTML = `${canShare ? '<button class="btn primary sm" data-clipshare>Share</button>' : ''}<button class="btn ${canShare ? 'soft' : 'primary'} sm" data-clipsave>Download .${ext}</button><a class="btn soft sm" href="${xIntent('My YT agent at work on Robinhood Chain. Every move checked by @openservai SERV Reasoning.', location.origin)}" target="_blank" rel="noopener">Post on X</a><button class="btn soft sm" data-close>Close</button>`;
+    openLayer('#clipModal');
+  } catch (e) {
+    toast(`Could not record: ${e.message}`, 'err');
+  } finally {
+    clearInterval(tick);
+    wrap.classList.remove('recording');
+  }
 }
-function bubbleFor(s) {
-  if (s.stage === 'decision') return [s.ok === false ? `SERV says hold off. ${s.reason || ''}` : `SERV says go. ${s.reason || ''}`, s.ok === false ? 'no' : 'ok', s.model ? `SERV Reasoning · ${s.model}` : ''];
-  if (s.stage === 'serv') return ['Let me ask SERV Reasoning about this one…', '', ''];
-  if (s.stage === 'exec') return [s.text, s.ok === false ? 'no' : 'ok', ''];
-  if (s.stage === 'done') return [`${s.text} zZz`, '', ''];
-  return [s.text, '', ''];
+function saveClip() {
+  const c = state.clip; if (!c) return;
+  const a = document.createElement('a'); a.href = c.url; a.download = `bandit-agent.${c.ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Clip saved. Post it anywhere.', 'ok');
+}
+async function shareClip() {
+  const c = state.clip; if (!c) return;
+  try { await navigator.share({ files: [new File([c.blob], `bandit-agent.${c.ext}`, { type: c.blob.type })], text: 'My YT agent at work, checked by SERV Reasoning.' }); } catch {}
 }
 
 function renderAgent() {
@@ -546,8 +562,8 @@ function renderAgent() {
   <div class="card agent-hero">
     <div class="mascot sleep" id="mascot"><img src="/art/mascot.svg" alt="BANDIT the raccoon"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div>
     <div>
-      <h2>Your BANDIT agent</h2>
-      <div class="state"><span class="state-pill ${mode.cls}"><i></i>${mode.text}</span>${owner ? '<span class="badge confirmed">Owner mode</span>' : ''}</div>
+      <h2>${owner ? 'Your house agent' : "BANDIT's house agent"}</h2>
+      <div class="state"><span class="state-pill ${mode.cls}"><i></i>${mode.text}</span>${owner ? '<span class="badge confirmed">Owner mode</span>' : '<span class="badge none plain">Trades a real wallet on Robinhood Chain</span>'}</div>
       <div class="agent-stats">
         <div class="stat"><div class="v">${bal}</div><div class="k">Wallet${a.agent.balanceUsd != null ? ` · ${usd(a.agent.balanceUsd)}` : ''}</div></div>
         <div class="stat"><div class="v">$${(a.agent.spentTodayUsd || 0).toFixed(0)}<span class="faint" style="font-size:14px"> / $${a.caps.maxDailyUsd}</span></div><div class="k">Spent today</div></div>
@@ -558,25 +574,23 @@ function renderAgent() {
     <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
       ${owner ? '<button class="btn primary" id="runNow">Run now <span class="arr">→</span></button>' : '<button class="btn ghost" id="ownerOpen">Owner mode</button>'}
       ${a.telegram.followUrl ? `<a class="btn tg sm" href="${esc(a.telegram.followUrl)}" target="_blank" rel="noopener">Follow on Telegram</a>` : ''}
-      <a class="btn soft sm" href="#/receipts">See receipts</a>
+      <a class="btn soft sm" href="#/receipts">See activity</a>
     </div>
+  </div>
+  <div class="card live-card world-card">
+    <div class="wc-head"><div><h3>Agent World <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
+      <p class="sub">Watch the agent work: it scans the markets, checks the rules, asks SERV Reasoning, acts on Robinhood Chain and tells Telegram. Every move comes from a real run. Go fullscreen to stream it, or clip it for social.</p></div></div>
+    ${worldHtml()}
+    <div class="live-actions">
+      ${owner ? '<button class="btn primary sm" id="runNow2">Run now</button>' : ''}
+      ${worldButtons()}
+      <span class="when">${a.lastRun ? `Last run ${ago(a.lastRun.at)} · ${esc(a.lastRun.source)} · ${a.lastRun.live ? 'live' : 'dry run'}` : 'No runs yet'}</span>
+    </div>
+    <details class="runlog"><summary>Run log</summary><div class="console" id="console"><div class="empty">No runs yet. ${owner ? 'Press Run now to wake the agent.' : 'The agent wakes on its schedule.'}</div></div></details>
   </div>
   <div class="agent-grid">
     <div>
-      <div class="card live-card">
-        <h3>Agent Live <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
-        <p class="sub">Each run, step by step: scan the markets, check your rules, get a live Pendle quote, ask SERV Reasoning to confirm or hold off, act on Robinhood Chain, tell Telegram.</p>
-        ${pipelineHtml()}
-        <div class="live-buddy"><div class="buddy sleep" id="buddy"><img src="/art/mascot.svg" alt="BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div><div class="bubble" id="bubble">${esc(idleLine(a))}</div></div>
-        <div class="mkt-strip" id="mktStrip"></div>
-        <div class="console" id="console"><div class="empty">No runs yet. ${owner ? 'Press Run now to wake the agent.' : 'The agent wakes on its schedule.'}</div></div>
-        <div class="live-actions">
-          ${owner ? '<button class="btn primary sm" id="runNow2">Run now</button>' : ''}
-          <button class="btn soft sm" id="replay" ${a.lastRun && a.lastRun.steps && a.lastRun.steps.length ? '' : 'disabled'}>Replay last run</button>
-          <span class="when">${a.lastRun ? `Last run ${ago(a.lastRun.at)} · ${esc(a.lastRun.source)} · ${a.lastRun.live ? 'live' : 'dry run'}` : ''}</span>
-        </div>
-      </div>
-      <div class="card panel" style="margin-top:14px">
+      <div class="card panel">
         <h3>Rules <span class="faint" style="font-size:12px;font-weight:500">${alertCount} Telegram alert${alertCount === 1 ? '' : 's'} watching</span></h3>
         <p class="sub">The agent checks these on every run. Nothing trades unless SERV Reasoning confirms and the hard limits allow it.</p>
         <div class="rules">${ownerRules.length ? ownerRules.map(ruleHtml).join('') : `<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:130px"><b>No rules yet</b>${owner ? 'Arm your first rule below.' : 'Only the owner can arm trading rules. Anyone can set a Telegram alert from a market card.'}</div>`}</div>
@@ -602,7 +616,7 @@ function renderAgent() {
       </div>
     </div>
   </div>`;
-  if (a.lastRun && a.lastRun.steps && a.lastRun.steps.length) showRunStatic(a.lastRun);
+  mountWorld('house');
   if (a.agent.address) drawQr(a.agent.address);
   bindRuleBuilder();
 }
@@ -704,25 +718,75 @@ function eventHtml(e) {
 function ledgerHtml(rows) {
   return `<table class="ledger"><thead><tr><th>Position</th><th>Cost</th><th>Value</th><th>Est. points</th></tr></thead><tbody>${rows.map(p => `<tr><td>${esc(p.name)}<div class="faint" style="font-size:11px;font-weight:500">${esc((p.entry && (p.entry.program || p.entry.status)) || '')} · held ${p.daysHeld}d</div></td><td>${usd(p.costUsd)}</td><td>${p.valueUsd == null ? 'n/a' : usd(p.valueUsd)}</td><td>${p.pointsEst == null ? 'rate unknown' : compact(p.pointsEst)}</td></tr>`).join('')}</tbody></table>`;
 }
+// A routine check, shown in the timeline so the agent never looks idle when it is simply waiting.
+function checkHtml(r) {
+  const acted = (r.actions || []).length;
+  const title = acted ? `Checked and acted: ${acted} action${acted === 1 ? '' : 's'}` : 'Checked the markets: nothing to do yet';
+  const who = r.source === 'cron' ? 'on its own' : r.source === 'owner' || r.source === 'user' ? 'you woke it' : esc(r.source || '');
+  const lines = (r.lines || []).slice(0, 2).map(l => `<div class="es">${clean(l)}</div>`).join('');
+  return `<div class="evt check${acted ? ' acted' : ''}"><span class="ei">◌</span><div><div class="et">${title}</div>${lines}<div class="em">${who}</div></div><span class="ea">${ago(r.at)}</span></div>`;
+}
+const timelineOf = (events, runs, render) => [...events.map(e => ({ at: e.at, html: render(e) })), ...runs.map(r => ({ at: r.at, html: checkHtml(r) }))]
+  .sort((x, y) => Date.parse(y.at) - Date.parse(x.at)).slice(0, 50).map(x => x.html).join('');
+const actTabs = tab => `<div class="seg act-tabs" role="tablist"><button data-acttab="me" class="${tab === 'me' ? 'on' : ''}">Your agent</button><button data-acttab="house" class="${tab === 'house' ? 'on' : ''}">BANDIT house agent</button></div>`;
+
 function renderReceipts() {
   const root = $('#receiptsRoot');
+  const tab = state.actTab || (state.me ? 'me' : 'house');
+  if (tab === 'me') return renderMyActivity(root);
   const a = state.agent;
-  if (!a) { root.innerHTML = '<div class="card board-msg" style="margin-top:14px"><span class="sk" style="width:50%;margin:0 auto"></span></div>'; return; }
-  const ev = a.events || [];
+  if (!a) { root.innerHTML = `<div style="margin-top:14px">${actTabs(tab)}</div><div class="card board-msg" style="margin-top:14px"><span class="sk" style="width:50%;margin:0 auto"></span></div>`; return; }
+  const ev = a.events || [], runs = a.runs || [];
   const count = t => ev.filter(e => e.type === t).length;
   const pts = a.ledger.reduce((s, p) => s + (p.pointsEst || 0), 0);
   root.innerHTML = `
-  <div class="sechead" style="margin-top:14px"><div><span class="eyebrow">Receipts</span><h2>Everything the agent did, with proof</h2><p>Every trade links to Robinhood Chain. Every hold shows SERV Reasoning's reason. Points and decay are estimates.</p></div>${a.agent.addressUrl ? `<a class="btn ghost sm" href="${esc(a.agent.addressUrl)}" target="_blank" rel="noopener">Agent wallet on explorer</a>` : ''}</div>
+  <div class="sechead" style="margin-top:14px"><div><span class="eyebrow">Activity</span><h2>Everything the house agent did, with proof</h2><p>BANDIT's own agent trades a real wallet on Robinhood Chain. Every trade links to the chain, every hold shows SERV Reasoning's reason, and every scheduled check is listed.</p></div>${actTabs(tab)}</div>
   <div class="stats" style="margin:0 0 20px">
     <div class="stat"><div class="v lime">${count('trade')}</div><div class="k">Trades onchain</div></div>
     <div class="stat"><div class="v">${count('simulated')}</div><div class="k">Dry runs</div></div>
     <div class="stat"><div class="v">${count('held')}</div><div class="k">Held by SERV</div></div>
+    <div class="stat"><div class="v">${runs.length}</div><div class="k">Recent checks</div></div>
     <div class="stat"><div class="v">${pts ? compact(pts) : 'n/a'}</div><div class="k">Est. points so far</div></div>
-    <div class="stat"><div class="v">${usd(a.totals.decayPaidUsd || 0)}</div><div class="k">Est. decay paid</div></div>
   </div>
   <div class="agent-grid">
-    <div class="card panel"><h3>Activity</h3><p class="sub">Newest first.</p>${ev.length ? `<div class="timeline">${ev.map(eventHtml).join('')}</div>` : '<div class="empty"><img src="/art/empty-state.svg" alt=""><b>Nothing yet</b>When the agent acts or SERV holds off, it shows up here.</div>'}</div>
-    <div class="card panel"><h3>Points ledger</h3><p class="sub">Positions the agent holds onchain, with estimated points so far. Estimates, not promises.</p>${a.ledger.length ? ledgerHtml(a.ledger) : '<div class="empty" style="padding:20px"><b>No positions yet</b>The first live trade opens one.</div>'}</div>
+    <div class="card panel"><h3>Timeline <a class="btn soft xs" href="#/agent">Watch it live</a></h3><p class="sub">Newest first, including checks where nothing needed doing.</p>${ev.length || runs.length ? `<div class="timeline">${timelineOf(ev, runs, eventHtml)}</div>` : '<div class="empty"><img src="/art/empty-state.svg" alt=""><b>Nothing yet</b>When the agent checks, acts or SERV holds off, it shows up here.</div>'}</div>
+    <div>
+      <div class="card panel"><h3>Points ledger</h3><p class="sub">Positions the agent holds onchain, with estimated points so far. Estimates, not promises.</p>${a.ledger.length ? ledgerHtml(a.ledger) : '<div class="empty" style="padding:20px"><b>No positions yet</b>The first live trade opens one.</div>'}</div>
+      ${a.agent.addressUrl ? `<a class="btn ghost sm" style="margin-top:12px" href="${esc(a.agent.addressUrl)}" target="_blank" rel="noopener">Agent wallet on the explorer</a>` : ''}
+    </div>
+  </div>`;
+}
+function renderMyActivity(root) {
+  const head = sub => `<div class="sechead" style="margin-top:14px"><div><span class="eyebrow">Activity</span><h2>What your agent has been doing</h2><p>${sub}</p></div>${actTabs('me')}</div>`;
+  if (!state.me) {
+    root.innerHTML = `${head('Every check, every practice trade and every SERV decision your agent makes shows up here.')}
+      <div class="card first-move"><img src="/art/mascot.svg" alt=""><div><span class="eyebrow">No agent yet</span><h3>Create your free agent to see its activity</h3><p>It starts with $1,000 of practice money, checks your rules every 10 minutes, and SERV Reasoning explains every move.</p><div class="acts-row"><button class="btn primary" id="actCreate">Create my free agent <span class="arr">→</span></button><button class="btn soft sm" data-acttab="house">See the house agent</button></div></div></div>`;
+    return;
+  }
+  const st = state.meStatus;
+  if (!st) { root.innerHTML = `${head('Loading your agent…')}<div class="card board-msg"><span class="sk" style="width:50%;margin:0 auto"></span></div>`; return; }
+  const p = st.paper, ev = st.events || [], runs = st.runs || [];
+  const count = t => ev.filter(e => e.type === t).length;
+  const active = st.rules.filter(r => r.status === 'active');
+  const pnlColor = p.pnlUsd > 0 ? 'var(--lime)' : p.pnlUsd < 0 ? 'var(--hi)' : 'var(--text)';
+  const quiet = !count('paper') && !count('held') && active.length;
+  root.innerHTML = `${head('Every check, practice trade and SERV decision, newest first. Your agent runs on its own every 10 minutes, even when this page is closed.')}
+  <div class="stats" style="margin:0 0 20px">
+    <div class="stat"><div class="v">$${Number(p.totalUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div><div class="k">Practice portfolio</div></div>
+    <div class="stat"><div class="v" style="color:${pnlColor}">${p.pnlUsd >= 0 ? '+' : ''}$${Math.abs(p.pnlUsd).toFixed(2)}</div><div class="k">P&amp;L</div></div>
+    <div class="stat"><div class="v lime">${count('paper')}</div><div class="k">Practice trades</div></div>
+    <div class="stat"><div class="v">${count('held')}</div><div class="k">Held by SERV</div></div>
+    <div class="stat"><div class="v">${runs.length}</div><div class="k">Recent checks</div></div>
+  </div>
+  ${quiet ? `<div class="callout calm"><span class="ic">◌</span><div><b>Your agent is watching, not trading yet.</b> ${active.map(r => `${esc(shortRule(r))}: ${clean(r.lastResult || 'not checked yet')}`).join(' ')} It trades only when a rule is met and SERV Reasoning agrees.</div></div>` : ''}
+  <div class="agent-grid">
+    <div class="card panel"><h3>Timeline <a class="btn soft xs" href="#/my">Watch it live</a></h3><p class="sub">Newest first, including checks where nothing needed doing.</p>${ev.length || runs.length ? `<div class="timeline">${timelineOf(ev, runs, myEventHtml)}</div>` : '<div class="empty"><img src="/art/empty-state.svg" alt=""><b>No checks yet</b>Arm a rule on My agent, then press Wake my agent.</div>'}</div>
+    <div>
+      <div class="card panel"><h3>Practice portfolio</h3><p class="sub">Marked to Pendle's live YT prices. Practice results, not a promise of real ones.</p>
+        ${st.positions.length ? `<table class="ledger"><thead><tr><th>Position</th><th>Cost</th><th>Value</th><th>P&amp;L</th></tr></thead><tbody>${st.positions.map(x => `<tr><td>${esc(x.name)}<div class="faint" style="font-size:11px;font-weight:500">${esc(x.chainName)}</div></td><td>${usd(x.costUsd)}</td><td>${x.valueUsd == null ? 'n/a' : usd(x.valueUsd)}</td><td style="color:${(x.pnlUsd || 0) >= 0 ? 'var(--lime)' : 'var(--hi)'}">${x.pnlPct == null ? 'n/a' : `${x.pnlPct >= 0 ? '+' : ''}${x.pnlPct}%`}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:18px"><b>No positions yet</b>Your agent opens one when a rule fires and SERV confirms.</div>'}
+      </div>
+      <div class="card panel" style="margin-top:14px"><h3>Rules it is watching</h3><div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">⚑</span><div><div class="d">${esc(shortRule(r))}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span></div></div>`).join('') : '<p class="help">No rules yet. <a class="linkish" href="#/my">Arm one on My agent</a>.</p>'}</div></div>
+    </div>
   </div>`;
 }
 
@@ -1008,7 +1072,7 @@ function wrapLines(x, text, maxW, maxLines) {
   }
   return lines;
 }
-function pickLines(x, p, w, max) { x.font = '400 25px "DM Sans"'; return wrapLines(x, p.one_liner, w - 56, max); }
+function pickLines(x, p, w, max) { x.font = '400 25px "Geist"'; return wrapLines(x, p.one_liner, w - 56, max); }
 const pickHeight = (x, p, w, max) => 28 + 46 + 14 + pickLines(x, p, w, max).length * 34 + 22 + 30 + 34;
 function drawPick(x, p, i, X, Y, w, h, max) {
   const m = p.market, v = verdictOf(m), col = VCOL[v.k];
@@ -1016,10 +1080,10 @@ function drawPick(x, p, i, X, Y, w, h, max) {
   x.strokeStyle = i === 0 ? hexA(col, 0.5) : 'rgba(234,238,218,0.10)'; x.lineWidth = 2; x.stroke();
   x.textBaseline = 'middle';
   rr(x, X + 28, Y + 28, 46, 46, 13); x.fillStyle = i === 0 ? '#C8F25A' : 'rgba(234,238,218,0.08)'; x.fill();
-  x.fillStyle = i === 0 ? '#12160A' : '#F1F2E8'; x.font = '700 22px "JetBrains Mono"'; x.textAlign = 'center'; x.fillText(String(i + 1), X + 51, Y + 52);
-  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 32px "DM Sans"';
+  x.fillStyle = i === 0 ? '#12160A' : '#F1F2E8'; x.font = '700 22px "Geist Mono"'; x.textAlign = 'center'; x.fillText(String(i + 1), X + 51, Y + 52);
+  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 32px "Geist"';
   x.fillText(clipW(x, m ? `YT-${m.name}` : p.name, w - 340), X + 90, Y + 52);
-  x.font = '800 20px "DM Sans"';
+  x.font = '800 20px "Geist"';
   const pw = x.measureText(v.t).width + 50, px = X + w - 28 - pw;
   rr(x, px, Y + 32, pw, 40, 20); x.fillStyle = hexA(col, 0.16); x.fill();
   x.fillStyle = col; x.beginPath(); x.arc(px + 20, Y + 52, 5, 0, Math.PI * 2); x.fill();
@@ -1041,9 +1105,9 @@ function drawPick(x, p, i, X, Y, w, h, max) {
   }
   const r = m && m.range, up = r && r.toHigh > 0.005;
   x.textAlign = 'right'; x.textBaseline = 'alphabetic';
-  x.fillStyle = up ? '#C8F25A' : '#A7AB9A'; x.font = '600 30px "JetBrains Mono"';
+  x.fillStyle = up ? '#C8F25A' : '#A7AB9A'; x.font = '600 30px "Geist Mono"';
   x.fillText(r ? (up ? upPct(r.toHigh) : 'At its high') : 'Too new', X + w - 28, gy + 12);
-  x.fillStyle = '#6E7263'; x.font = '600 18px "DM Sans"';
+  x.fillStyle = '#6E7263'; x.font = '600 18px "Geist"';
   x.fillText(r ? (up ? 'room to run' : 'no room left') : 'no range yet', X + w - 28, gy + 38);
   x.textAlign = 'left';
 }
@@ -1051,7 +1115,7 @@ async function answerImage(j) {
   const W = 1080, H = 1350, P = 72, footTop = H - 132;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d');
-  await Promise.all(['700 44px "Space Grotesk"', '600 36px "Space Grotesk"', '400 25px "DM Sans"', '500 30px "DM Sans"', '700 32px "DM Sans"', '800 20px "DM Sans"', '600 30px "JetBrains Mono"', '700 22px "JetBrains Mono"'].map(f => document.fonts.load(f).catch(() => null)));
+  await Promise.all(['700 44px "Space Grotesk"', '600 36px "Geist"', '400 25px "Geist"', '500 30px "Geist"', '700 32px "Geist"', '800 20px "Geist"', '600 30px "Geist Mono"', '700 22px "Geist Mono"'].map(f => document.fonts.load(f).catch(() => null)));
   const logo = await loadImg('/art/logo-mask.svg');
   x.fillStyle = '#0A0B08'; x.fillRect(0, 0, W, H);
   let g = x.createRadialGradient(W * 0.88, 40, 0, W * 0.88, 40, 760);
@@ -1065,24 +1129,24 @@ async function answerImage(j) {
   if ('letterSpacing' in x) x.letterSpacing = '6px';
   x.fillText('BANDIT', P + 96, 104);
   if ('letterSpacing' in x) x.letterSpacing = '0px';
-  x.font = '700 20px "DM Sans"';
+  x.font = '700 20px "Geist"';
   const label = 'Read by SERV Reasoning', lw = x.measureText(label).width + 62, lx = W - P - lw;
   rr(x, lx, 80, lw, 48, 24); x.fillStyle = '#171A13'; x.fill(); x.strokeStyle = 'rgba(234,238,218,0.16)'; x.lineWidth = 2; x.stroke();
   rr(x, lx + 12, 92, 24, 24, 7); x.fillStyle = '#C8F25A'; x.fill();
   x.fillStyle = '#12160A'; x.font = '800 15px "Space Grotesk"'; x.textAlign = 'center'; x.fillText('S', lx + 24, 105);
-  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 20px "DM Sans"'; x.fillText(label, lx + 46, 105);
+  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 20px "Geist"'; x.fillText(label, lx + 46, 105);
   // question and headline
   x.textBaseline = 'top';
   let y = 196;
-  x.fillStyle = '#C8F25A'; x.font = '800 20px "DM Sans"';
+  x.fillStyle = '#C8F25A'; x.font = '800 20px "Geist"';
   if ('letterSpacing' in x) x.letterSpacing = '3px';
   x.fillText('YOU ASKED', P, y);
   if ('letterSpacing' in x) x.letterSpacing = '0px';
   y += 36;
-  x.fillStyle = '#A7AB9A'; x.font = '500 30px "DM Sans"';
+  x.fillStyle = '#A7AB9A'; x.font = '500 30px "Geist"';
   for (const l of wrapLines(x, `“${j.question}”`, W - 2 * P, 2)) { x.fillText(l, P, y); y += 40; }
   y += 20;
-  x.fillStyle = '#F1F2E8'; x.font = '600 36px "Space Grotesk"';
+  x.fillStyle = '#F1F2E8'; x.font = '600 36px "Geist"';
   for (const l of wrapLines(x, j.answer.headline, W - 2 * P, 3)) { x.fillText(l, P, y); y += 48; }
   y += 26;
   // up to three picks, as many as fit
@@ -1095,12 +1159,12 @@ async function answerImage(j) {
   // footer
   x.strokeStyle = 'rgba(234,238,218,0.12)'; x.lineWidth = 2; x.beginPath(); x.moveTo(P, footTop); x.lineTo(W - P, footTop); x.stroke();
   x.textBaseline = 'alphabetic';
-  x.fillStyle = '#C8F25A'; x.font = '600 26px "JetBrains Mono"';
+  x.fillStyle = '#C8F25A'; x.font = '600 26px "Geist Mono"';
   x.fillText(location.hostname === 'localhost' ? 'bandit-bands.vercel.app' : location.host, P, footTop + 56);
-  x.fillStyle = '#6E7263'; x.font = '500 20px "DM Sans"'; x.fillText('Data and reasoning only. Not financial advice.', P, footTop + 92);
+  x.fillStyle = '#6E7263'; x.font = '500 20px "Geist"'; x.fillText('Data and reasoning only. Not financial advice.', P, footTop + 92);
   x.textAlign = 'right';
-  x.fillStyle = '#A7AB9A'; x.font = '600 21px "DM Sans"'; x.fillText('The YT trading agent that works while you sleep', W - P, footTop + 56);
-  x.fillStyle = '#6E7263'; x.font = '500 20px "DM Sans"'; x.fillText(`${new Date(j.at).toUTCString().slice(5, 16)} · live Pendle data`, W - P, footTop + 92);
+  x.fillStyle = '#A7AB9A'; x.font = '600 21px "Geist"'; x.fillText('The YT trading agent that works while you sleep', W - P, footTop + 56);
+  x.fillStyle = '#6E7263'; x.font = '500 20px "Geist"'; x.fillText(`${new Date(j.at).toUTCString().slice(5, 16)} · live Pendle data`, W - P, footTop + 92);
   x.textAlign = 'left';
   return c;
 }
@@ -1656,14 +1720,16 @@ async function quickFirstRule(id) {
 async function loadMe() {
   clearTimeout(meTimer);
   if (document.hidden && state.meStatus) { meTimer = setTimeout(loadMe, 60_000); return; }
-  if (state.route !== 'my') return;
-  if (!state.me) { renderMy(); return; }
+  if (!['my', 'receipts', 'stream'].includes(state.route)) return;
+  if (!state.me) { if (state.route === 'my') renderMy(); if (state.route === 'receipts') renderReceipts(); return; }
   try {
     const st = await meApi('status');
     state.meStatus = st;
     const sig = JSON.stringify([st.rules, st.lastRun && st.lastRun.at, st.events[0] && st.events[0].id, st.paper, st.approvals, st.telegram]);
     const editing = $('#myRuleForm') && $('#myRuleForm').contains(document.activeElement);
-    if (!state.live.playing && !editing && sig !== state.meSig) { state.meSig = sig; renderMy(); }
+    if (state.route === 'my' && !state.live.playing && !editing && sig !== state.meSig) { state.meSig = sig; renderMy(); }
+    if (state.route === 'receipts') renderReceipts();
+    if (state.route === 'stream' && state.streamKind === 'me') streamTick(st.lastRun);
     const m = location.hash.match(/approve=([a-z0-9_]+)/i);
     if (m) {
       const a = st.approvals.find(x => x.id === m[1]);
@@ -1673,7 +1739,22 @@ async function loadMe() {
   } catch (e) {
     if (!state.me) renderMy(); else toast(e.message, 'err');
   }
-  if (state.route === 'my') meTimer = setTimeout(loadMe, 60_000);
+  if (['my', 'receipts', 'stream'].includes(state.route)) meTimer = setTimeout(loadMe, state.route === 'stream' ? 30_000 : 60_000);
+}
+
+/* ---------- stream view: the Agent World alone, full window (works as an OBS browser source) ---------- */
+function renderStream() {
+  const me = /[?&]me=1/.test(location.hash) && Boolean(state.me);
+  state.streamKind = me ? 'me' : 'house';
+  $('#streamRoot').innerHTML = `${worldHtml()}<div class="stream-hint">Streaming ${me ? 'your agent' : 'the BANDIT house agent'} live · <a href="#/${me ? 'my' : 'agent'}">Leave stream view</a></div>`;
+  $('#worldWrap').classList.add('stream');
+  if (me ? state.meStatus : state.agent) mountWorld(state.streamKind);
+}
+// New runs play as they arrive; otherwise the world keeps its countdown fresh.
+function streamTick(run) {
+  if (!world || worldKind !== state.streamKind) { if ($('#world')) mountWorld(state.streamKind); return; }
+  if (run && run.steps && run.steps.length && run.at !== worldSeen[state.streamKind] && !world.isPlaying() && !world.isRecording()) { worldSeen[state.streamKind] = run.at; playRun(run); }
+  else updateWorldHud();
 }
 
 function myRuleBuilderHtml() {
@@ -1764,18 +1845,16 @@ function renderMy() {
   </div>
   ${!st.rules.length && firstMovePick() ? (() => { const f = firstMovePick(); return `<div class="card first-move"><img src="/art/mascot.svg" alt=""><div><span class="eyebrow">Your first move</span><h3>Let your agent watch YT-${esc(f.name)}</h3><p>${esc(plainBand(f))} If it gets back to its ${Math.min(90, f.band.days)}-day high it would be worth ${upPct(f.range.toHigh)}, and it has ${f.daysToMaturity} days to get there. A good first thing to watch.</p><div class="acts-row"><button class="btn primary" data-quick="${esc(f.id)}">Watch it: buy $100 when it's cheap <span class="arr">→</span></button><button class="btn soft sm" id="myCustom">I'll build my own rule</button></div><p class="help">Practice money only. Your agent checks every 10 minutes, and SERV Reasoning has to agree before it buys.</p></div></div>`; })() : ''}
   ${st.approvals.length ? `<div class="card panel" style="margin-top:14px;border-color:rgba(200,242,90,.35)"><h3>Waiting for your signature</h3><p class="sub">SERV Reasoning confirmed these on Robinhood Chain. Nothing moves until you sign in your own wallet.</p><div class="rules">${st.approvals.map(a => `<div class="rule"><span class="ico">✍</span><div><div class="d">Enter $${a.usd} of ${esc(a.name)}</div><div class="r">${clean(a.reason)}</div></div><div class="rule-acts"><button class="btn primary xs" data-approve="${esc(a.id)}">Review and sign</button></div></div>`).join('')}</div></div>` : ''}
+  <div class="card live-card world-card">
+    <div class="wc-head"><div><h3>Your agent's world <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
+      <p class="sub">${active.length ? 'Watch your agent work. It wakes on its own every 10 minutes, or right now with Wake my agent. Go fullscreen to stream it, or clip it for social.' : 'Arm a rule below and your agent starts watching. Then wake it and watch it work.'}</p></div></div>
+    ${worldHtml()}
+    <div class="live-actions"><button class="btn primary sm" id="myRun2">Wake my agent</button>${worldButtons()}<span class="when">${st.lastRun ? `Last run ${ago(st.lastRun.at)} · ${st.lastRun.source === 'cron' ? 'on its own' : 'you woke it'}` : 'No runs yet'}</span></div>
+    <details class="runlog"><summary>Run log</summary><div class="console" id="console"><div class="empty">No runs yet. Arm a rule, then press Wake my agent.</div></div></details>
+  </div>
   <div class="agent-grid">
     <div>
-      <div class="card live-card">
-        <h3>Agent Live <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
-        <p class="sub">Watch your agent think, step by step. It wakes every 10 minutes on its own, or right now with Wake my agent.</p>
-        ${pipelineHtml()}
-        <div class="live-buddy"><div class="buddy sleep" id="buddy"><img src="/art/mascot.svg" alt="BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div><div class="bubble" id="bubble">${active.length ? 'Asleep. I check your rules every 10 minutes.' : 'Arm a rule below and I will start watching.'}</div></div>
-        <div class="mkt-strip" id="mktStrip"></div>
-        <div class="console" id="console"><div class="empty">No runs yet. Arm a rule, then press Wake my agent.</div></div>
-        <div class="live-actions"><button class="btn primary sm" id="myRun2">Wake my agent</button><button class="btn soft sm" id="myReplay" ${st.lastRun && st.lastRun.steps && st.lastRun.steps.length ? '' : 'disabled'}>Replay last run</button><span class="when">${st.lastRun ? `Last run ${ago(st.lastRun.at)} · ${esc(st.lastRun.source)}` : ''}</span></div>
-      </div>
-      <div class="card panel" style="margin-top:14px">
+      <div class="card panel">
         <h3>My rules</h3>
         <p class="sub">Up to 5 active rules. Each one fires once, then you can arm the next.</p>
         <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">⚑</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span><button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
@@ -1789,7 +1868,7 @@ function renderMy() {
       <div class="card panel" style="margin-top:14px"><h3>Activity</h3><p class="sub">Newest first.</p>${st.events.length ? `<div class="timeline">${st.events.map(myEventHtml).join('')}</div>` : '<p class="help">Nothing yet.</p>'}</div>
     </div>
   </div>`;
-  if (st.lastRun && st.lastRun.steps && st.lastRun.steps.length) showRunStatic(st.lastRun);
+  mountWorld('me');
   bindMyBuilder();
 }
 
@@ -1816,20 +1895,20 @@ async function createMyRule() {
 async function runMine() {
   const btns = ['#myRun', '#myRun2'].map(x => $(x)).filter(Boolean);
   btns.forEach(b => { b.disabled = true; });
-  const token = ++state.live.token;
   state.live.playing = true;
-  wake(true); say('Waking up. Checking your rules…');
-  resetPipeline(); setNode(0, { stage: 'scan' });
-  $('#console').innerHTML = '<div class="ln"><span class="st scan">scan</span><div class="lt">Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>';
-  const hint = setTimeout(() => { if (token === state.live.token) { flowWires(0, 3); setNode(3, { stage: 'serv' }); say('Let me ask SERV Reasoning about this one…'); } }, 2800);
+  if (world) world.wake();
+  if ($('#console')) $('#console').innerHTML = wakingLine;
+  $('#worldWrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   try {
     const run = await meApi('run');
-    clearTimeout(hint); state.live.playing = false;
+    worldSeen.me = run.at;
     await playRun(run);
     state.meSig = '';
     await loadMe();
   } catch (e) {
-    clearTimeout(hint); state.live.playing = false; resetPipeline(); wake(false); say(e.message, 'no'); toast(e.message, 'err');
+    state.live.playing = false;
+    if (world) world.stop();
+    toast(e.message, 'err');
   } finally { btns.forEach(b => { b.disabled = false; }); }
 }
 
@@ -1838,7 +1917,6 @@ function handleMyClick(e) {
   let el;
   if ((el = q('[data-mywallet]'))) { signInWith(state.walletList[Number(el.dataset.mywallet)]); return true; }
   if (q('#myRun') || q('#myRun2')) { runMine(); return true; }
-  if (q('#myReplay')) { if (state.meStatus && state.meStatus.lastRun) playRun(state.meStatus.lastRun); return true; }
   if (q('#myRuleCreate')) { createMyRule(); return true; }
   if ((el = q('[data-mydel]'))) { meApi('delete-rule', { id: el.dataset.mydel }).then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
   if ((el = q('[data-approve]'))) { const a = state.meStatus.approvals.find(x => x.id === el.dataset.approve); if (a) { state.trade.size = a.usd; openTrade(a.marketId); } return true; }
@@ -1887,7 +1965,15 @@ document.addEventListener('click', e => {
   if ((el = q('[data-del]'))) return ownerAction({ action: 'delete-rule', id: el.dataset.del });
   if ((el = q('[data-wallet]'))) return connectWallet(state.walletList[Number(el.dataset.wallet)]);
   if (q('#runNow') || q('#runNow2')) return runNow();
-  if (q('#replay')) return state.agent && state.agent.lastRun && playRun(state.agent.lastRun);
+  if (q('#wReplay')) { const run = worldRun(); if (run && run.steps && run.steps.length && !(world && world.isRecording())) playRun(run); else if (!run) toast('No runs yet. Wake the agent first.'); return; }
+  if (q('#wFull')) return streamWorld();
+  if (q('#wExit')) { if (document.fullscreenElement) document.exitFullscreen(); $('#worldWrap')?.classList.remove('pseudo-full'); return; }
+  if (q('#wClip')) return openClip();
+  if ((el = q('[data-clipfmt]'))) return recordClip(el.dataset.clipfmt);
+  if (q('[data-clipsave]')) return saveClip();
+  if (q('[data-clipshare]')) return shareClip();
+  if ((el = q('[data-acttab]'))) { state.actTab = el.dataset.acttab; renderReceipts(); if (state.actTab === 'me') loadMe(); return; }
+  if (q('#actCreate')) { state.pendingWatch = null; return openWelcome(ONBOARD.length - 1); }
   if (q('#ownerOpen')) { $('#ownerErr').classList.add('hidden'); openLayer('#ownerModal'); setTimeout(() => $('#ownerKey').focus(), 200); return; }
   if (q('#ownerSave')) return saveOwner();
   if (q('#copyAddr')) { navigator.clipboard && navigator.clipboard.writeText(state.agent.agent.address).then(() => toast('Address copied.', 'ok')); return; }
