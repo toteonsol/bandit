@@ -26,6 +26,9 @@ const readBody = req => new Promise((resolve, reject) => {
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  // Same rewrite as vercel.json: /a/<id> share links are served by api/share.js.
+  const share = url.pathname.match(/^\/a\/([a-f0-9]{16})$/);
+  if (share) { url.pathname = '/api/share'; url.searchParams.set('id', share[1]); }
   try {
     if (url.pathname.startsWith('/api/')) {
       const name = url.pathname.slice(5).replace(/[^a-z0-9-]/gi, '');

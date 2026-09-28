@@ -21,6 +21,7 @@ const formed = m => m.band && m.band.status === 'formed';
 const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - Date.parse(iso)) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
 const shortAddr = a => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '';
 const RH = 4663;
+const chainShort = m => ({ 4663: 'Robinhood', 1: 'Ethereum', 42161: 'Arbitrum' })[m.chainId] || m.chainName;
 const WALLET_CHAIN = { chainId: '0x1237', chainName: 'Robinhood Chain', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: ['https://rpc.mainnet.chain.robinhood.com'], blockExplorerUrls: ['https://robinhoodchain.blockscout.com'] };
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
 
@@ -54,11 +55,13 @@ function toast(text, kind = '') {
 /* ---------- router ---------- */
 function route() {
   const h = location.hash.replace(/^#\/?/, '').split('?')[0];
-  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my' }[h] || 'farm';
+  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my', ask: 'ask' }[h] || 'farm';
   const changed = r !== state.route;
   state.route = r;
   $$('.view').forEach(v => v.classList.toggle('on', v.id === `view-${r}`));
   $$('[data-route]').forEach(a => a.classList.toggle('on', a.dataset.route === r));
+  document.body.classList.toggle('on-ask', r === 'ask');
+  closeMenu();
   if (h === 'farm-board') setTimeout(() => $('#farm-board').scrollIntoView({ behavior: 'smooth' }), 40);
   const tm = location.hash.match(/^#\/trade\?m=([^&]+)/);
   if (tm) { const id = decodeURIComponent(tm[1]); history.replaceState(null, '', '#/'); const open = () => openTrade(id); state.data ? open() : setTimeout(open, 1500); }
@@ -70,6 +73,7 @@ function route() {
   if (r === 'my') { state.meSig = ''; renderMy(); loadMe(); }
   if (r === 'receipts') renderReceipts();
   if (r === 'agent' || r === 'receipts') loadAgent();
+  if (r === 'ask') renderAskPage();
 }
 window.addEventListener('hashchange', route);
 
@@ -193,7 +197,7 @@ function rowHtml(m) {
   const p = m.points || {};
   return `<div class="row" role="button" tabindex="0" data-ask="${esc(m.id)}" title="Ask BANDIT about YT-${esc(m.name)}">
     <div class="asset"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="meta">${shortDate(m.expiry)} · ${m.daysToMaturity}d${m.distorted ? ' · <span style="color:var(--err)">distorted</span>' : ''}</div></div></div>
-    <span class="hide-m hide-l"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span></span>
+    <span class="hide-m hide-l"><span class="badge chain c${m.chainId}">${esc(chainShort(m))}</span></span>
     ${bandHtml(m)}
     <div class="cell hide-m">${formed(m) ? `<span class="pct ${zone(m.band.percentile)}">P${Math.round(m.band.percentile)}</span>` : '<span class="pct forming">FORMING</span>'}<span class="lbl">${formed(m) ? zoneLabel(m.band.percentile) : `day ${m.band.days}`}</span></div>
     <div class="cell hide-m hide-l">${m.range ? upPct(m.range.toHigh) : 'n/a'}<span class="lbl">${m.range ? `low ${upPct(m.range.toLow)}` : 'no range'}</span></div>
@@ -224,7 +228,7 @@ async function loadMarkets() {
     state.byId = new Map(d.markets.map(m => [m.id, m]));
     $('#liveText').textContent = `LIVE · PENDLE · ${d.chains.length} CHAINS · ${d.markets.length} MARKETS`;
     $('#srcLine').textContent = `Pendle hosted API. Robinhood Chain markets above ${usd(d.chains[0].minLiquidityUsd)}, other chains above ${usd(d.minLiquidityUsd)}. Updated ${new Date(d.updatedAt).toISOString().slice(11, 16)} UTC.`;
-    renderFarm(); renderChains(); renderBoard(); fillMarketSelects();
+    renderFarm(); renderChains(); renderBoard(); fillMarketSelects(); renderSuggestions();
     if (state.route === 'my' && state.me && !state.live.playing && !($('#myRuleForm') && $('#myRuleForm').contains(document.activeElement))) { state.meSig = ''; renderMy(); }
   } catch (e) {
     if (state.data) return;
@@ -462,6 +466,7 @@ function renderAgent() {
     <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
       ${owner ? '<button class="btn primary" id="runNow">Run now <span class="arr">→</span></button>' : '<button class="btn ghost" id="ownerOpen">Owner mode</button>'}
       ${a.telegram.followUrl ? `<a class="btn tg sm" href="${esc(a.telegram.followUrl)}" target="_blank" rel="noopener">Follow on Telegram</a>` : ''}
+      <a class="btn soft sm" href="#/receipts">See receipts</a>
     </div>
   </div>
   <div class="agent-grid">
@@ -633,62 +638,459 @@ function renderReceipts() {
 function closeAll() { $$('.sheet.on, .modal.on').forEach(x => x.classList.remove('on')); $('#scrim').classList.remove('on'); }
 function openLayer(sel) { closeAll(); $('#scrim').classList.add('on'); $(sel).classList.add('on'); }
 
-/* ---------- Ask BANDIT ---------- */
-function openAsk(marketId) {
+/* ---------- Ask BANDIT (its own page) ---------- */
+const ASK_STEPS = ['Reading live Pendle prices', 'Comparing every YT with its last 90 days', 'SERV Reasoning is weighing room to run, time left and risk', 'Writing it up in plain English'];
+const RISK_NAME = { low: 'Careful', medium: 'Balanced', high: 'Bold' };
+const VCOL = { floor: '#5B9DFF', mid: '#C8F25A', top: '#FF8A4C', new: '#A7AB9A' };
+state.ask = { feed: [], items: {}, opts: { risk: 'medium', size: 1000, chain: 'all' }, focus: null, busy: false };
+state.watching = new Set();
+state.pendingWatch = null;
+
+const span = m => Math.min(90, (m.band && m.band.days) || 90);
+// Where a YT sits right now, in words anyone can read.
+function verdictOf(m) {
+  if (!m || !m.band || m.band.status !== 'formed') return { k: 'new', t: 'Too new to judge' };
+  const p = m.band.percentile;
+  return p >= 97 ? { k: 'top', t: 'At its high' } : p >= 80 ? { k: 'top', t: 'Near its top' } : p <= 20 ? { k: 'floor', t: 'Near its floor' } : { k: 'mid', t: 'Mid range' };
+}
+const optsLine = o => `${RISK_NAME[o.risk] || 'Balanced'} · $${Number(o.size || 1000).toLocaleString('en-US')} · ${o.chain === String(RH) ? 'Robinhood Chain' : 'All chains'}`;
+const askRecent = () => { try { return JSON.parse(store.get('bandit.asks') || '[]'); } catch { return []; } };
+function rememberAsk(j) {
+  store.set('bandit.asks', JSON.stringify([{ id: j.id, q: j.question, at: j.at }, ...askRecent().filter(x => x.id !== j.id)].slice(0, 6)));
+}
+const findAnswer = id => (state.ask.feed.find(x => x.j && x.j.id === id) || {}).j;
+const answerLink = j => `${location.origin}/a/${j.id}`;
+const xIntent = (text, url) => `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+const clip = (s, n) => s.length > n ? `${s.slice(0, n - 1).replace(/[\s,.;:]+$/, '')}…` : s;
+const withTag = lead => `${clip(lead, 205)}\n\nRead live by @openservai SERV Reasoning.`;
+
+function askSuggestions() {
+  const rh = (state.data ? state.data.markets : []).filter(m => m.chainId === RH && !m.distorted).sort((a, b) => formed(b) - formed(a) || b.liquidityUsd - a.liquidityUsd);
+  const named = rh.find(m => /NVDA/i.test(m.name)) || rh[0];
+  return [
+    { i: '↘', q: 'Which YTs are near their floor right now?' },
+    { i: '↗', q: 'Where is the most room to run with a month or more left?' },
+    { i: '◉', q: `Is YT-${named ? named.name : 'NVDA'} a good entry right now?` },
+    { i: '⛓', q: 'Anything on Robinhood Chain worth watching?', chain: String(RH) },
+    { i: '✦', q: 'Where are points cheapest to farm right now?' },
+  ];
+}
+function renderSuggestions() {
+  if (!$('#askSugg')) return;
+  $('#askSugg').innerHTML = askSuggestions().map((x, i) => `<button type="button" data-sugg="${i}"><i>${x.i}</i>${esc(x.q)}</button>`).join('');
+  const r = askRecent();
+  $('#askRecent').innerHTML = r.length ? `<span>Your recent questions</span>${r.slice(0, 4).map(x => `<button type="button" data-recent="${esc(x.id)}" title="${esc(x.q)}">${esc(x.q)}</button>`).join('')}` : '';
+}
+function renderAskPage() {
+  renderSuggestions();
+  const saved = location.hash.match(/[?&]a=([a-f0-9]{16})/);
+  if (saved) loadSavedAnswer(saved[1]);
+  else if (!state.ask.feed.length && matchMedia('(pointer:fine)').matches) setTimeout(() => { if (state.route === 'ask') $('#askQ').focus({ preventScroll: true }); }, 300);
+}
+function updateOptsSum() { $('#askOptsSum').textContent = optsLine(state.ask.opts); }
+function autosize() { const t = $('#askQ'); t.style.height = 'auto'; t.style.height = `${Math.min(160, t.scrollHeight)}px`; }
+function setFocus(m) {
+  state.ask.focus = m.id;
+  $('#askFocusPill').innerHTML = `About YT-${esc(m.name)} <button type="button" data-unfocus aria-label="Ask about every YT instead">×</button>`;
+  $('#askFocusPill').classList.remove('hidden');
+}
+function clearFocus() { state.ask.focus = null; $('#askFocusPill').classList.add('hidden'); }
+
+// Opens the Ask page. A card's Ask button asks right away; a table row only fills in the question.
+function openAsk(marketId, { auto = false } = {}) {
   const m = marketId && state.byId.get(marketId);
-  $('#askFocus').value = m ? m.id : '';
-  if (m) $('#askQ').value = `How do the points on YT-${m.name} (${m.chainName}) compare, and what are the trade-offs at my size?`;
-  openLayer('#askSheet');
+  if (state.route !== 'ask') location.hash = '#/ask';
+  if (!m) { setTimeout(() => $('#askQ').focus({ preventScroll: true }), 250); return; }
+  setFocus(m);
+  const q = `Is YT-${m.name} a good entry right now?`;
+  if (auto) { setTimeout(() => askBandit({ q, marketId: m.id }), 80); return; }
+  $('#askQ').value = q; autosize();
+  setTimeout(() => $('#askQ').focus({ preventScroll: true }), 250);
 }
-function pickHtml(p, i) {
-  const m = p.market;
-  return `<li class="pick"><span class="rk">${i + 1}</span><div>
-    <div class="pt"><div><div class="pn">${clean(m ? 'YT-' + m.name : p.name)}</div><div class="pm">${m ? `${esc(m.chainName)} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d · ${usd(m.liquidityUsd)}` : ''}</div></div>${p.lens ? `<span class="lens">${clean(p.lens)}</span>` : ''}</div>
-    ${m ? bandHtml(m) : ''}
-    <dl class="kv">
-      ${p.band_read ? `<dt>Band</dt><dd>${clean(p.band_read)}</dd>` : ''}
-      ${p.points_read ? `<dt>Points</dt><dd>${clean(p.points_read)}</dd>` : ''}
-      ${p.why_it_fits ? `<dt>Why it fits</dt><dd>${clean(p.why_it_fits)}</dd>` : ''}
-      ${p.trade_offs ? `<dt>Trade-offs</dt><dd>${clean(p.trade_offs)}</dd>` : ''}
-      ${(p.watch || []).length ? `<dt>Watch</dt><dd><div class="watch">${p.watch.map(w => `<span>${clean(w)}</span>`).join('')}</div></dd>` : ''}
-    </dl></div></li>`;
+
+function runHtml(item) {
+  return `<div class="ask-run">
+    <div class="ans-q"><div><p>${esc(item.q)}</p><small>${esc(optsLine(item.opts))}</small></div></div>
+    <div class="run-top"><img src="/art/mascot.svg" alt=""><div><b>BANDIT is on it</b><span class="run-t">0s · usually 10 to 30 seconds</span></div></div>
+    <ol class="run-steps">${ASK_STEPS.map((t, i) => `<li><span class="dot">${i + 1}</span><span>${t}</span></li>`).join('')}</ol>
+    <div class="run-ticker"><span class="faint">Checking</span><b class="tick-name">the live board</b><span class="tick-note"></span></div>
+  </div>`;
 }
-function renderAnswer(j, ms) {
-  const a = j.answer;
-  let html = '';
-  if (a) {
-    html += `<div class="ans-headline">${clean(a.headline)}</div>`;
-    if (a.ranked && a.ranked.length) html += `<div class="ans-sec">Ranked read · goal ${esc(j.goal)} · ${esc(j.risk)} risk</div><ol class="picks">${a.ranked.map(pickHtml).join('')}</ol>`;
-    if (a.main_risks && a.main_risks.length) html += `<div class="ans-sec">Main risks</div><div class="risks">${a.main_risks.map(r => `<div class="risk"><span class="nd"></span><div><b>${clean(r.risk)}.</b> ${clean(r.detail)}</div></div>`).join('')}</div>`;
-    if (a.note) html += `<p class="help" style="margin-top:14px">${clean(a.note)}</p>`;
-  } else {
-    html += `<p class="help" style="white-space:pre-wrap;color:var(--text-2)">${clean(j.raw || '')}</p>`;
-  }
-  html += `<div class="ans-meta"><span class="serv-badge"><span class="sd">S</span>Answered by <b>SERV Reasoning</b></span><span>model ${esc(j.model)}</span><span>${(ms / 1000).toFixed(1)}s</span><span>${j.marketsSent} markets</span>${j.excluded ? `<span>${j.excluded} distorted left out</span>` : ''}<span>Not financial advice</span></div>`;
-  const el = $('#answer');
-  el.classList.remove('ready');
-  el.innerHTML = html;
-  readyUp(el);
+// Step-by-step progress while SERV thinks, with a ticker of the YTs being read.
+function progress(el, t0) {
+  const steps = $$('.run-steps li', el);
+  const set = i => steps.forEach((li, j) => { li.classList.toggle('done', j < i); li.classList.toggle('active', j === i); if (j < i) $('.dot', li).textContent = '✓'; });
+  set(0);
+  const ms = (state.data ? state.data.markets : []).filter(m => !m.distorted);
+  let k = Math.floor(Math.random() * (ms.length || 1));
+  const timers = [setTimeout(() => set(1), 900), setTimeout(() => set(2), 2600)];
+  const tick = setInterval(() => {
+    const t = $('.run-t', el); if (t) t.textContent = `${Math.round((performance.now() - t0) / 1000)}s · usually 10 to 30 seconds`;
+    if (!ms.length) return;
+    const m = ms[k++ % ms.length], v = verdictOf(m);
+    const n = $('.tick-name', el), note = $('.tick-note', el);
+    if (n) n.textContent = `YT-${m.name}`;
+    if (note) { note.textContent = v.t.toLowerCase(); note.className = `tick-note ${v.k}`; }
+  }, 450);
+  const stop = () => { timers.forEach(clearTimeout); clearInterval(tick); };
+  return { stop, finish: () => { stop(); set(3); } };
 }
-async function ask(e) {
-  e.preventDefault();
-  const size = num($('#askSize').value);
-  const err = $('#askErr');
-  if (!(size > 0)) { err.textContent = 'Enter a position size in USD.'; err.classList.remove('hidden'); return; }
-  err.classList.add('hidden');
-  const btn = $('#askBtn');
-  btn.disabled = true;
+
+async function askBandit({ q, chain, risk, size, marketId } = {}) {
+  const s = state.ask;
+  if (s.busy) { toast('BANDIT is still answering your last question.'); return; }
+  const question = (q ?? $('#askQ').value).trim() || 'Which YTs look like a good entry right now?';
+  const opts = { ...s.opts, ...(chain ? { chain } : {}), ...(risk ? { risk } : {}), ...(size ? { size: Number(size) } : {}) };
+  const focus = marketId || s.focus || null;
+  const key = `q${Date.now().toString(36)}`;
+  const item = { key, q: question, opts, focus };
+  s.items[key] = item;
+  s.busy = true;
+  $('#askBtn').disabled = true;
+  if (q == null) { $('#askQ').value = ''; autosize(); }
+  clearFocus();
+  $('#askFeed').insertAdjacentHTML('afterbegin', `<div class="ask-item" id="ai-${key}">${runHtml(item)}</div>`);
+  const el = $(`#ai-${key}`);
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   const t0 = performance.now();
-  $('#answer').innerHTML = '<div class="thinking"><img src="/art/mascot.svg" alt=""><div><b>SERV Reasoning is reading the board</b><span id="askT">0s</span></div></div>';
-  const tick = setInterval(() => { const el = $('#askT'); if (el) el.textContent = `${Math.round((performance.now() - t0) / 1000)}s`; }, 500);
+  const prog = progress(el, t0);
   try {
-    const j = await api('/api/ask', { method: 'POST', body: { sizeUsd: size, risk: segVal($('#askRisk')), goal: segVal($('#askGoal')), question: $('#askQ').value.trim(), chain: $('#askChain').value, marketId: $('#askFocus').value || undefined } });
-    renderAnswer(j, performance.now() - t0);
-  } catch (e2) {
-    $('#answer').innerHTML = `<div class="ans-err"><b>SERV Reasoning did not return an answer.</b>${esc(e2.message)}<br>BANDIT never falls back to another model.</div>`;
+    const j = await api('/api/ask', { method: 'POST', body: { question, risk: opts.risk, sizeUsd: opts.size, chain: opts.chain, marketId: focus || undefined } });
+    prog.finish();
+    await sleep(450);
+    j.ms = performance.now() - t0;
+    item.j = j;
+    s.feed.unshift(item);
+    el.innerHTML = answerCardHtml(j);
+    readyUp(el);
+    if (j.id) { rememberAsk(j); renderSuggestions(); }
+  } catch (e) {
+    prog.stop();
+    el.innerHTML = `<div class="ans-err"><b>SERV Reasoning didn't answer this time.</b>${esc(e.message)}<br>BANDIT never switches to another model, so nothing was made up.<div style="margin-top:10px"><button class="btn soft xs" data-retry="${key}">Try again</button></div></div>`;
   } finally {
-    clearInterval(tick); btn.disabled = false;
+    s.busy = false;
+    $('#askBtn').disabled = false;
   }
+}
+
+function pickStats(m) {
+  const r = m.range, d = span(m);
+  return [
+    r ? (r.toHigh > 0.005 ? [upPct(r.toHigh), `if it gets back to its ${d}-day high`, 'up'] : ['At its high', `no room left to its ${d}-day high`, 'flat']) : ['Too new', 'not enough history for a range yet', 'flat'],
+    r ? [upPct(r.toLow), `if it drops to its ${d}-day low`, 'dn'] : [`${m.band.days || 0} days`, 'of price history so far', 'flat'],
+    [`${m.daysToMaturity} days`, `left before it ends on ${shortDate(m.expiry)}`, 'flat'],
+  ];
+}
+const statsHtml = m => `<div class="ph-stats">${pickStats(m).map(([b, s, c]) => `<div><b class="${c}">${esc(b)}</b><span>${esc(s)}</span></div>`).join('')}</div>`;
+const gaugeHtml = m => `<div class="gz">${bandHtml(m, { labels: false })}<div class="gz-l"><span>Cheapest in ${span(m)} days</span><span>Priciest</span></div></div>`;
+
+function pickActsHtml(m, p, j) {
+  const watching = state.watching.has(m.id);
+  return `<div class="pick-acts">
+    ${m.distorted ? '' : watching ? '<a class="btn sm watching" href="#/my">✓ Your agent is watching</a>' : `<button class="btn primary sm" data-watch="${esc(m.id)}">Watch it with my agent</button>`}
+    <button class="btn soft sm" data-alert="${esc(m.id)}">Alert me on Telegram</button>
+    ${state.byId.has(m.id) && tradable(state.byId.get(m.id)) ? `<button class="btn soft sm" data-trade="${esc(m.id)}">Trade it</button>` : ''}
+    <a class="btn soft sm" href="${xIntent(pickShareText(p), j.id ? answerLink(j) : location.origin)}" target="_blank" rel="noopener">Share</a>
+  </div>`;
+}
+function pickBodyHtml(p, m, j) {
+  return `<p class="ph-why">${clean(p.why)}</p>
+    ${p.watch_out ? `<div class="watch-out"><i>!</i><span>${clean(p.watch_out)}</span></div>` : ''}
+    <div class="tags">${p.lens ? `<span class="lens">${clean(p.lens)}</span>` : ''}${(p.watch || []).map(w => `<span>${clean(w)}</span>`).join('')}</div>
+    ${m ? pickActsHtml(m, p, j) : ''}`;
+}
+function heroPickHtml(p, j) {
+  const m = p.market, v = verdictOf(m);
+  return `<div class="pick-hero ${v.k}">
+    <div class="ph-top"><span class="rank">#1 pick</span>${m ? `<div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>` : ''}<div class="ph-name"><div class="nm">${esc(m ? `YT-${m.name}` : p.name)}</div><div class="sub">${m ? `${esc(m.chainName)} · ${usd(m.liquidityUsd)} liquidity` : ''}</div></div><span class="vpill ${v.k}">${v.t}</span></div>
+    <p class="ph-line">${clean(p.one_liner)}</p>
+    ${m ? gaugeHtml(m) + statsHtml(m) : ''}
+    ${pickBodyHtml(p, m, j)}
+  </div>`;
+}
+function rowPickHtml(p, rank, j) {
+  const m = p.market, v = verdictOf(m), r = m && m.range;
+  const n = r ? (r.toHigh > 0.005 ? `<b>${upPct(r.toHigh)}</b><span>room to run</span>` : '<b class="flat">At high</b><span>no room left</span>') : '<b class="flat">New</b><span>no range yet</span>';
+  return `<details class="pick-row"><summary><span class="rk">${rank}</span><div class="pr-main"><div class="nm">${esc(m ? `YT-${m.name}` : p.name)}<span class="vpill ${v.k}">${v.t}</span></div><p>${clean(p.one_liner)}</p></div><div class="pr-num">${n}</div><span class="chev">›</span></summary>
+    <div class="pr-body">${m ? gaugeHtml(m) + statsHtml(m) : ''}${pickBodyHtml(p, m, j)}</div></details>`;
+}
+function followUps(j) {
+  const r = (j.answer && j.answer.ranked) || [];
+  const out = [];
+  if (r[1] && r[1].market) out.push({ label: `More on YT-${r[1].market.name}`, q: `Is YT-${r[1].market.name} a good entry right now?` });
+  if (j.chain !== String(RH)) out.push({ label: 'Only Robinhood Chain', q: j.question, chain: String(RH) });
+  if (j.risk !== 'low') out.push({ label: 'Something more careful', q: j.question, risk: 'low' });
+  if (j.goal !== 'points') out.push({ label: 'Cheapest points instead', q: 'Where are points cheapest to farm right now?' });
+  return out.slice(0, 4);
+}
+function pickShareText(p) {
+  const m = p.market;
+  return withTag(`BANDIT on YT-${m ? m.name : p.name}: ${verdictOf(m).t.toLowerCase()}. ${p.one_liner}`);
+}
+function answerShareText(j) {
+  const p = j.answer.ranked[0], m = p && p.market;
+  return withTag(m ? `BANDIT's top pick right now: YT-${m.name}, ${verdictOf(m).t.toLowerCase()}. ${p.one_liner}` : j.answer.headline);
+}
+function shareBarHtml(j) {
+  return `<div class="share-bar"><div class="sb-t">Share this read<span>A link and an image card. Your wallet is never included.</span></div>
+    <button class="btn primary sm" data-card="${esc(j.id)}">Share card</button>
+    <a class="btn soft sm" href="${xIntent(answerShareText(j), answerLink(j))}" target="_blank" rel="noopener">Post on X</a>
+    <button class="btn soft sm" data-link="${esc(j.id)}">${navigator.share ? 'Share link' : 'Copy link'}</button>
+  </div>`;
+}
+function answerCardHtml(j, { saved = false } = {}) {
+  const a = j.answer;
+  const head = `<div class="ans-q"><div><p>${esc(j.question)}</p><small>${esc(optsLine({ risk: j.risk, size: j.sizeUsd, chain: j.chain }))}</small></div></div>
+    <div class="ans-by"><img src="/art/mascot.svg" alt=""><div><b>BANDIT</b><span>SERV Reasoning · ${saved ? `asked ${ago(j.at)}` : `${((j.ms || 0) / 1000).toFixed(1)}s`} · read ${j.marketsSent} live markets</span></div></div>`;
+  const savedNote = saved ? `<div class="saved-note"><span><b>Saved answer</b> from ${esc(new Date(j.at).toUTCString().slice(5, 22))} UTC. Prices move, so treat it as a snapshot.</span><button class="btn soft xs" data-reask="${esc(j.id)}">Ask again with live data</button></div>` : '';
+  if (!a || !a.ranked || !a.ranked.length) return `<article class="ans-card">${savedNote}${head}<p class="ph-why" style="white-space:pre-wrap">${clean(j.raw || 'No picks came back for this one. Try asking it another way.')}</p></article>`;
+  const [first, ...rest] = a.ranked;
+  const note = a.note || '';
+  const disc = /advice/i.test(note) ? '' : /reasoning only/i.test(note) ? ' Not financial advice.' : ' Data and reasoning only. Not financial advice.';
+  return `<article class="ans-card">
+    ${savedNote}${head}
+    <h3 class="ans-h">${clean(a.headline)}</h3>
+    ${heroPickHtml(first, j)}
+    ${rest.length ? `<div class="ans-sec">Also worth a look</div><div class="more-picks">${rest.map((p, i) => rowPickHtml(p, i + 2, j)).join('')}</div>` : ''}
+    ${a.main_risks && a.main_risks.length ? `<div class="ans-sec">What could go wrong</div><div class="risk-list">${a.main_risks.map(r => `<div class="risk-item"><b>${clean(r.risk)}</b>${clean(r.detail)}</div>`).join('')}</div>` : ''}
+    ${j.id ? shareBarHtml(j) : ''}
+    <div class="follow"><span>Ask next</span>${followUps(j).map(f => `<button type="button" data-follow="${esc(f.q)}"${f.chain ? ` data-fchain="${f.chain}"` : ''}${f.risk ? ` data-frisk="${f.risk}"` : ''}>${esc(f.label)}</button>`).join('')}</div>
+    <div class="ans-foot"><span class="serv-badge"><span class="sd">S</span>Answered by <b>SERV Reasoning</b></span><span>${esc(j.model)}</span><span>Pendle data from ${new Date(j.dataAsOf).toISOString().slice(11, 16)} UTC</span></div>
+    <p class="ans-note">${clean(a.note || '')}${disc}</p>
+  </article>`;
+}
+
+// A shared or earlier answer, loaded by its id.
+async function loadSavedAnswer(id) {
+  const existing = $(`#ai-s${id}`);
+  if (existing || findAnswer(id)) { if (existing) existing.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  $('#askFeed').insertAdjacentHTML('afterbegin', `<div class="ask-item" id="ai-s${id}"><div class="card board-msg"><span class="sk" style="width:60%;margin:0 auto"></span></div></div>`);
+  const el = $(`#ai-s${id}`);
+  try {
+    const j = await api(`/api/ask?id=${id}`);
+    state.ask.feed.unshift({ key: `s${id}`, j, saved: true });
+    el.innerHTML = answerCardHtml(j, { saved: true });
+    readyUp(el);
+    setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+  } catch (e) {
+    el.innerHTML = `<div class="ans-err"><b>That answer is no longer available.</b>${esc(e.message)} Ask BANDIT a fresh question above.</div>`;
+  }
+}
+
+// "Watch it with my agent": arms a practice-money rule that buys $100 once the YT is cheap.
+const watchPct = m => formed(m) && m.band.percentile <= 30 ? Math.min(60, Math.ceil(m.band.percentile) + 10) : 25;
+async function watchWithAgent(id) {
+  const m = state.byId.get(id);
+  if (!m) { toast('That YT is no longer live.', 'err'); return; }
+  if (!state.me) { state.pendingWatch = id; openWelcome(ONBOARD.length - 1); return; }
+  const pct = watchPct(m);
+  try {
+    await meApi('create-rule', { marketId: m.id, dir: 'below', pct, ruleAction: 'enter', sizeUsd: 100, mode: 'paper' });
+    state.watching.add(m.id);
+    $$('[data-watch]').filter(b => b.dataset.watch === m.id).forEach(b => { b.outerHTML = '<a class="btn sm watching" href="#/my">✓ Your agent is watching</a>'; });
+    const now = formed(m) && m.band.percentile <= pct;
+    toast(`Your agent is watching YT-${m.name} with $100 of practice money. ${now ? "It's cheap right now, so it acts on its next check if SERV agrees." : 'It buys once the price gets cheap, if SERV agrees.'}`, 'ok');
+    state.meSig = '';
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ---------- share card (an image anyone can post) ---------- */
+const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+function rr(x, X, Y, w, h, r) { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); }
+function clipW(x, s, maxW) { let t = s; while (t.length > 1 && x.measureText(t).width > maxW) t = t.slice(0, -1); return t === s ? s : `${t}…`; }
+function wrapLines(x, text, maxW, maxLines) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '', i = 0;
+  for (; i < words.length; i++) {
+    const t = line ? `${line} ${words[i]}` : words[i];
+    if (line && x.measureText(t).width > maxW) { lines.push(line); line = words[i]; if (lines.length === maxLines) break; }
+    else line = t;
+  }
+  if (lines.length < maxLines) { if (line) lines.push(line); }
+  else if (i < words.length) {
+    let last = lines[maxLines - 1];
+    while (last.length > 1 && x.measureText(`${last}…`).width > maxW) last = last.slice(0, -1);
+    lines[maxLines - 1] = `${last.replace(/[\s,.;:]+$/, '')}…`;
+  }
+  return lines;
+}
+function pickLines(x, p, w, max) { x.font = '400 25px "DM Sans"'; return wrapLines(x, p.one_liner, w - 56, max); }
+const pickHeight = (x, p, w, max) => 28 + 46 + 14 + pickLines(x, p, w, max).length * 34 + 22 + 30 + 34;
+function drawPick(x, p, i, X, Y, w, h, max) {
+  const m = p.market, v = verdictOf(m), col = VCOL[v.k];
+  rr(x, X, Y, w, h, 26); x.fillStyle = '#12140F'; x.fill();
+  x.strokeStyle = i === 0 ? hexA(col, 0.5) : 'rgba(234,238,218,0.10)'; x.lineWidth = 2; x.stroke();
+  x.textBaseline = 'middle';
+  rr(x, X + 28, Y + 28, 46, 46, 13); x.fillStyle = i === 0 ? '#C8F25A' : 'rgba(234,238,218,0.08)'; x.fill();
+  x.fillStyle = i === 0 ? '#12160A' : '#F1F2E8'; x.font = '700 22px "JetBrains Mono"'; x.textAlign = 'center'; x.fillText(String(i + 1), X + 51, Y + 52);
+  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 32px "DM Sans"';
+  x.fillText(clipW(x, m ? `YT-${m.name}` : p.name, w - 340), X + 90, Y + 52);
+  x.font = '800 20px "DM Sans"';
+  const pw = x.measureText(v.t).width + 50, px = X + w - 28 - pw;
+  rr(x, px, Y + 32, pw, 40, 20); x.fillStyle = hexA(col, 0.16); x.fill();
+  x.fillStyle = col; x.beginPath(); x.arc(px + 20, Y + 52, 5, 0, Math.PI * 2); x.fill();
+  x.fillText(v.t, px + 33, Y + 53);
+  x.textBaseline = 'top';
+  const lines = pickLines(x, p, w, max);
+  x.fillStyle = '#A7AB9A';
+  let yy = Y + 88;
+  for (const l of lines) { x.fillText(l, X + 28, yy); yy += 34; }
+  yy += 22;
+  const gx = X + 28, gw = w - 56 - 220, gy = yy + 8;
+  const grad = x.createLinearGradient(gx, 0, gx + gw, 0);
+  grad.addColorStop(0, 'rgba(91,157,255,0.55)'); grad.addColorStop(0.5, 'rgba(234,238,218,0.10)'); grad.addColorStop(1, 'rgba(255,138,76,0.55)');
+  rr(x, gx, gy, gw, 8, 4); x.fillStyle = grad; x.fill();
+  if (m && m.band && m.band.status === 'formed') {
+    const dx = gx + gw * Math.max(0.02, Math.min(0.98, m.band.percentile / 100));
+    x.beginPath(); x.arc(dx, gy + 4, 11, 0, Math.PI * 2); x.fillStyle = col; x.fill();
+    x.lineWidth = 6; x.strokeStyle = hexA(col, 0.25); x.stroke();
+  }
+  const r = m && m.range, up = r && r.toHigh > 0.005;
+  x.textAlign = 'right'; x.textBaseline = 'alphabetic';
+  x.fillStyle = up ? '#C8F25A' : '#A7AB9A'; x.font = '600 30px "JetBrains Mono"';
+  x.fillText(r ? (up ? upPct(r.toHigh) : 'At its high') : 'Too new', X + w - 28, gy + 12);
+  x.fillStyle = '#6E7263'; x.font = '600 18px "DM Sans"';
+  x.fillText(r ? (up ? 'room to run' : 'no room left') : 'no range yet', X + w - 28, gy + 38);
+  x.textAlign = 'left';
+}
+async function answerImage(j) {
+  const W = 1080, H = 1350, P = 72, footTop = H - 132;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  await Promise.all(['700 44px "Space Grotesk"', '600 36px "Space Grotesk"', '400 25px "DM Sans"', '500 30px "DM Sans"', '700 32px "DM Sans"', '800 20px "DM Sans"', '600 30px "JetBrains Mono"', '700 22px "JetBrains Mono"'].map(f => document.fonts.load(f).catch(() => null)));
+  const logo = await loadImg('/art/logo-mask.svg');
+  x.fillStyle = '#0A0B08'; x.fillRect(0, 0, W, H);
+  let g = x.createRadialGradient(W * 0.88, 40, 0, W * 0.88, 40, 760);
+  g.addColorStop(0, 'rgba(200,242,90,0.16)'); g.addColorStop(1, 'rgba(200,242,90,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  g = x.createRadialGradient(0, H, 0, 0, H, 760);
+  g.addColorStop(0, 'rgba(91,157,255,0.10)'); g.addColorStop(1, 'rgba(91,157,255,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  // header: logo, wordmark, SERV badge
+  x.textBaseline = 'middle'; x.textAlign = 'left';
+  if (logo) { x.save(); rr(x, P, 64, 76, 76, 20); x.clip(); x.drawImage(logo, P, 64, 76, 76); x.restore(); }
+  x.fillStyle = '#F1F2E8'; x.font = '700 44px "Space Grotesk"';
+  if ('letterSpacing' in x) x.letterSpacing = '6px';
+  x.fillText('BANDIT', P + 96, 104);
+  if ('letterSpacing' in x) x.letterSpacing = '0px';
+  x.font = '700 20px "DM Sans"';
+  const label = 'Read by SERV Reasoning', lw = x.measureText(label).width + 62, lx = W - P - lw;
+  rr(x, lx, 80, lw, 48, 24); x.fillStyle = '#171A13'; x.fill(); x.strokeStyle = 'rgba(234,238,218,0.16)'; x.lineWidth = 2; x.stroke();
+  rr(x, lx + 12, 92, 24, 24, 7); x.fillStyle = '#C8F25A'; x.fill();
+  x.fillStyle = '#12160A'; x.font = '800 15px "Space Grotesk"'; x.textAlign = 'center'; x.fillText('S', lx + 24, 105);
+  x.textAlign = 'left'; x.fillStyle = '#F1F2E8'; x.font = '700 20px "DM Sans"'; x.fillText(label, lx + 46, 105);
+  // question and headline
+  x.textBaseline = 'top';
+  let y = 196;
+  x.fillStyle = '#C8F25A'; x.font = '800 20px "DM Sans"';
+  if ('letterSpacing' in x) x.letterSpacing = '3px';
+  x.fillText('YOU ASKED', P, y);
+  if ('letterSpacing' in x) x.letterSpacing = '0px';
+  y += 36;
+  x.fillStyle = '#A7AB9A'; x.font = '500 30px "DM Sans"';
+  for (const l of wrapLines(x, `“${j.question}”`, W - 2 * P, 2)) { x.fillText(l, P, y); y += 40; }
+  y += 20;
+  x.fillStyle = '#F1F2E8'; x.font = '600 36px "Space Grotesk"';
+  for (const l of wrapLines(x, j.answer.headline, W - 2 * P, 3)) { x.fillText(l, P, y); y += 48; }
+  y += 26;
+  // up to three picks, as many as fit
+  for (const [i, p] of j.answer.ranked.slice(0, 3).entries()) {
+    const max = i === 0 ? 2 : 1, h = pickHeight(x, p, W - 2 * P, max);
+    if (y + h > footTop - 16) break;
+    drawPick(x, p, i, P, y, W - 2 * P, h, max);
+    y += h + 16;
+  }
+  // footer
+  x.strokeStyle = 'rgba(234,238,218,0.12)'; x.lineWidth = 2; x.beginPath(); x.moveTo(P, footTop); x.lineTo(W - P, footTop); x.stroke();
+  x.textBaseline = 'alphabetic';
+  x.fillStyle = '#C8F25A'; x.font = '600 26px "JetBrains Mono"';
+  x.fillText(location.hostname === 'localhost' ? 'bandit-bands.vercel.app' : location.host, P, footTop + 56);
+  x.fillStyle = '#6E7263'; x.font = '500 20px "DM Sans"'; x.fillText('Data and reasoning only. Not financial advice.', P, footTop + 92);
+  x.textAlign = 'right';
+  x.fillStyle = '#A7AB9A'; x.font = '600 21px "DM Sans"'; x.fillText('The YT trading agent that works while you sleep', W - P, footTop + 56);
+  x.fillStyle = '#6E7263'; x.font = '500 20px "DM Sans"'; x.fillText(`${new Date(j.at).toUTCString().slice(5, 16)} · live Pendle data`, W - P, footTop + 92);
+  x.textAlign = 'left';
+  return c;
+}
+async function openShareCard(id) {
+  const j = findAnswer(id); if (!j) return;
+  $('#sharePrev').innerHTML = '<span class="sk" style="width:100%;height:100%;border-radius:0"></span>';
+  $('#shareActs').innerHTML = '';
+  openLayer('#shareModal');
+  try {
+    const canvas = await answerImage(j);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    if (state.share && state.share.url) URL.revokeObjectURL(state.share.url);
+    state.share = { blob, url: URL.createObjectURL(blob), j };
+    $('#sharePrev').innerHTML = `<img src="${state.share.url}" alt="BANDIT answer card">`;
+    const file = new File([blob], `bandit-${j.id}.png`, { type: 'image/png' });
+    const canFiles = Boolean(navigator.canShare && navigator.canShare({ files: [file] }));
+    $('#shareActs').innerHTML = `${canFiles ? '<button class="btn primary sm" data-sharefile>Share image</button>' : ''}<button class="btn ${canFiles ? 'soft' : 'primary'} sm" data-download>Download image</button>
+      <a class="btn soft sm" href="${xIntent(answerShareText(j), answerLink(j))}" target="_blank" rel="noopener">Post on X</a>
+      <a class="btn soft sm" href="https://t.me/share/url?url=${encodeURIComponent(answerLink(j))}&text=${encodeURIComponent(answerShareText(j))}" target="_blank" rel="noopener">Telegram</a>
+      <button class="btn soft sm" data-close>Close</button>`;
+  } catch (e) {
+    $('#sharePrev').innerHTML = `<div class="ans-err" style="margin:20px"><b>Could not draw the card in this browser.</b>${esc(e.message)}</div>`;
+    $('#shareActs').innerHTML = '<button class="btn soft sm" data-close>Close</button>';
+  }
+}
+function downloadCard() {
+  if (!state.share) return;
+  const a = document.createElement('a');
+  a.href = state.share.url; a.download = `bandit-${state.share.j.id}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Card saved. Post it anywhere.', 'ok');
+}
+async function shareCardFile() {
+  if (!state.share) return;
+  const { blob, j } = state.share;
+  try { await navigator.share({ files: [new File([blob], `bandit-${j.id}.png`, { type: 'image/png' })], text: answerShareText(j), url: answerLink(j) }); } catch {}
+}
+async function shareLink(id) {
+  const j = findAnswer(id); if (!j) return;
+  const url = answerLink(j);
+  if (navigator.share) { try { await navigator.share({ title: 'BANDIT', text: answerShareText(j), url }); } catch {} return; }
+  try { await navigator.clipboard.writeText(url); toast('Link copied. Anyone with it sees this answer.', 'ok'); } catch { window.prompt('Copy this link', url); }
+}
+
+/* ---------- account menu ---------- */
+function acctMenuHtml() {
+  const addr = (state.me && state.me.address) || state.wallet.address;
+  const icon = state.wallet.info && state.wallet.info.icon ? `<img src="${esc(state.wallet.info.icon)}" alt="">` : '<span class="am-ic">◆</span>';
+  return `<div class="am-head">${icon}<div><b>${esc(shortAddr(addr))}</b><span>${state.me ? 'Signed in. Your agent keeps working while you are away.' : 'Wallet connected. No agent yet.'}</span></div></div>
+    ${state.me ? '<a class="am-item" href="#/my"><i>◉</i>My agent</a>' : '<button class="am-item" data-am="create"><i>◉</i>Create my free agent</button>'}
+    <a class="am-item" href="#/ask"><i>✦</i>Ask BANDIT</a>
+    <button class="am-item" data-am="copy"><i>⧉</i>Copy address</button>
+    <button class="am-item" data-am="switch"><i>⇄</i>Use a different wallet</button>
+    <button class="am-item danger" data-am="disconnect"><i>⏻</i>Disconnect</button>`;
+}
+function toggleMenu(force) {
+  const menu = $('#acctMenu'); if (!menu) return;
+  const on = force ?? !menu.classList.contains('on');
+  if (on) menu.innerHTML = acctMenuHtml();
+  menu.classList.toggle('on', on);
+  $('#walletBtn').setAttribute('aria-expanded', String(on));
+}
+function closeMenu() { if ($('#acctMenu') && $('#acctMenu').classList.contains('on')) toggleMenu(false); }
+function disconnect({ quiet = false } = {}) {
+  const p = state.wallet.provider;
+  state.me = null; state.meStatus = null; state.meSig = '';
+  store.set('bandit.me', null); store.set('bandit.wallet', null);
+  state.wallet = { provider: null, info: null, address: null };
+  state.trade.review = null;
+  closeMenu(); updateWalletBtn();
+  // Ask the wallet to forget this site too, so the next connect shows its account picker again.
+  if (p && p.request) p.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] }).catch(() => {});
+  if (state.route === 'my') renderMy();
+  if ($('#tradeSheet').classList.contains('on')) renderTrade();
+  if (!quiet) toast('Disconnected. Your agent keeps its rules and practice money for when you sign back in.', 'ok');
+}
+function handleMenu(action) {
+  const addr = (state.me && state.me.address) || state.wallet.address;
+  if (action === 'copy') { closeMenu(); if (navigator.clipboard) navigator.clipboard.writeText(addr).then(() => toast('Address copied.', 'ok')); }
+  if (action === 'create') { closeMenu(); state.pendingWatch = null; openWelcome(ONBOARD.length - 1); }
+  if (action === 'switch') { disconnect({ quiet: true }); state.pendingWatch = null; openWelcome(ONBOARD.length - 1); }
+  if (action === 'disconnect') disconnect();
 }
 
 /* ---------- wallet + Trade with BANDIT (user's own wallet) ---------- */
@@ -714,7 +1116,7 @@ function setWallet(p, address) {
   if (p.info.rdns) store.set('bandit.wallet', p.info.rdns);
   if (p.provider.on && !p.provider.__banditBound) {
     p.provider.__banditBound = true;
-    p.provider.on('accountsChanged', acc => { state.wallet.address = acc[0] || null; state.trade.review = null; updateWalletBtn(); if ($('#tradeSheet').classList.contains('on')) renderTrade(); });
+    p.provider.on('accountsChanged', acc => { if (state.wallet.provider !== p.provider) return; state.wallet.address = acc[0] || null; state.trade.review = null; updateWalletBtn(); if ($('#tradeSheet').classList.contains('on')) renderTrade(); });
   }
   updateWalletBtn();
 }
@@ -746,9 +1148,10 @@ function openTrade(marketId) {
 }
 function updateWalletBtn() {
   const b = $('#walletBtn');
-  b.textContent = state.me ? `My agent · ${shortAddr(state.me.address)}` : state.wallet.address ? `Get my agent · ${shortAddr(state.wallet.address)}` : 'Get my agent';
-  b.classList.toggle('primary', !state.me);
-  b.classList.toggle('ghost', Boolean(state.me));
+  const addr = (state.me && state.me.address) || state.wallet.address;
+  b.innerHTML = addr ? `<span class="wb-dot${state.me ? '' : ' off'}"></span>${esc(shortAddr(addr))}<span class="caret">▾</span>` : 'Get my agent';
+  b.classList.toggle('primary', !addr);
+  b.classList.toggle('ghost', Boolean(addr));
 }
 async function fetchBalance(address) {
   try {
@@ -943,7 +1346,10 @@ async function signInWith(p) {
     store.set('bandit.me', JSON.stringify(session));
     updateWalletBtn();
     closeAll();
-    toast('Your agent is ready with $1,000 of practice money.', 'ok');
+    const pending = state.pendingWatch;
+    state.pendingWatch = null;
+    if (pending) await watchWithAgent(pending);
+    else toast('Your agent is ready with $1,000 of practice money.', 'ok');
     state.meSig = '';
     if (state.route !== 'my') location.hash = '#/my'; else await loadMe();
   } catch (e) {
@@ -959,7 +1365,9 @@ const ONBOARD = [
 ];
 state.welcome = 0;
 function renderWelcome() {
-  const i = state.welcome, step = ONBOARD[i], last = i === ONBOARD.length - 1;
+  const i = state.welcome, last = i === ONBOARD.length - 1;
+  const pw = last && state.pendingWatch && state.byId.get(state.pendingWatch);
+  const step = pw ? { ...ONBOARD[i], title: `Let your agent watch YT-${pw.name}`, text: `Sign a free message with your wallet to create your agent. It starts with $1,000 of practice money and buys $100 of YT-${pw.name} once it gets cheap, only if SERV Reasoning agrees.` } : ONBOARD[i];
   const list = walletOptions();
   state.walletList = list;
   const cta = !last ? '' : state.me ? '<a class="btn primary" href="#/my" data-close>Open my agent</a>'
@@ -973,7 +1381,7 @@ function renderWelcome() {
     ${cta}
     <div class="acts">${i > 0 ? '<button class="btn soft sm" id="obBack">Back</button>' : '<button class="btn soft sm" data-close>Just look around</button>'}${!last ? '<button class="btn primary sm" id="obNext">Next <span class="arr">→</span></button>' : ''}</div>`;
 }
-function openWelcome() { state.welcome = 0; renderWelcome(); openLayer('#welcomeModal'); }
+function openWelcome(step = 0) { state.welcome = step; renderWelcome(); openLayer('#welcomeModal'); }
 
 function firstMovePick() {
   return (state.data ? state.data.markets : [])
@@ -1097,7 +1505,7 @@ function renderMy() {
     <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
       <button class="btn primary" id="myRun">Wake my agent <span class="arr">→</span></button>
       ${st.telegram.linked ? '' : `<button class="btn tg sm" id="myTg" ${st.telegram.bot ? '' : 'disabled'}>Connect Telegram</button>`}
-      <button class="btn soft xs" id="mySignOut">Sign out</button>
+      <button class="btn soft xs" id="mySignOut">Disconnect</button>
     </div>
   </div>
   ${!st.rules.length && firstMovePick() ? (() => { const f = firstMovePick(); return `<div class="card first-move"><img src="/art/mascot.svg" alt=""><div><span class="eyebrow">Your first move</span><h3>Let your agent watch YT-${esc(f.name)}</h3><p>${esc(plainBand(f))} If it gets back to its ${Math.min(90, f.band.days)}-day high it would be worth ${upPct(f.range.toHigh)}, and it has ${f.daysToMaturity} days to get there. A good first thing to watch.</p><div class="acts-row"><button class="btn primary" data-quick="${esc(f.id)}">Watch it: buy $100 when it's cheap <span class="arr">→</span></button><button class="btn soft sm" id="myCustom">I'll build my own rule</button></div><p class="help">Practice money only. Your agent checks every 10 minutes, and SERV Reasoning has to agree before it buys.</p></div></div>`; })() : ''}
@@ -1182,7 +1590,7 @@ function handleMyClick(e) {
   if ((el = q('[data-approve]'))) { const a = state.meStatus.approvals.find(x => x.id === el.dataset.approve); if (a) { state.trade.size = a.usd; openTrade(a.marketId); } return true; }
   if (q('#myTg')) { meApi('telegram-link').then(j => { window.open(j.url, '_blank', 'noopener'); toast('Press Start in Telegram to link your agent.', 'ok'); }).catch(err => toast(err.message, 'err')); return true; }
   if (q('#myReset')) { if (confirm('Reset your paper portfolio to $1,000?')) meApi('reset').then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
-  if (q('#mySignOut')) { state.me = null; state.meStatus = null; store.set('bandit.me', null); updateWalletBtn(); renderMy(); return true; }
+  if (q('#mySignOut')) { disconnect(); return true; }
   if ((el = q('[data-quick]'))) { quickFirstRule(el.dataset.quick); return true; }
   if (q('#myCustom')) { $('#myBuilder')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
   if (q('#obNext')) { state.welcome = Math.min(ONBOARD.length - 1, state.welcome + 1); renderWelcome(); return true; }
@@ -1192,11 +1600,24 @@ function handleMyClick(e) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
+  if (!e.target.closest('#acct')) closeMenu();
   if (e.target.closest('a[href^="http"]')) return; // external links (Share, explorer, Telegram) just open
   if (handleMyClick(e)) return;
   const q = sel => e.target.closest(sel);
   let el;
-  if ((el = q('[data-ask]'))) return openAsk(el.dataset.ask);
+  if ((el = q('[data-am]'))) return handleMenu(el.dataset.am);
+  if ((el = q('[data-sugg]'))) { const s = askSuggestions()[Number(el.dataset.sugg)]; if (s) askBandit({ q: s.q, chain: s.chain }); return; }
+  if ((el = q('[data-recent]'))) return loadSavedAnswer(el.dataset.recent);
+  if ((el = q('[data-follow]'))) return askBandit({ q: el.dataset.follow, chain: el.dataset.fchain, risk: el.dataset.frisk });
+  if ((el = q('[data-reask]'))) { const j = findAnswer(el.dataset.reask); if (j) askBandit({ q: j.question, chain: j.chain, risk: j.risk, size: j.sizeUsd }); return; }
+  if ((el = q('[data-retry]'))) { const it = state.ask.items[el.dataset.retry]; if (it) { $(`#ai-${it.key}`)?.remove(); askBandit({ q: it.q, chain: it.opts.chain, risk: it.opts.risk, size: it.opts.size, marketId: it.focus }); } return; }
+  if ((el = q('[data-watch]'))) return watchWithAgent(el.dataset.watch);
+  if ((el = q('[data-card]'))) return openShareCard(el.dataset.card);
+  if ((el = q('[data-link]'))) return shareLink(el.dataset.link);
+  if (q('[data-download]')) return downloadCard();
+  if (q('[data-sharefile]')) return shareCardFile();
+  if (q('[data-unfocus]')) return clearFocus();
+  if ((el = q('[data-ask]'))) return openAsk(el.dataset.ask, { auto: !el.classList.contains('row') });
   if ((el = q('[data-alert]'))) return openAlert(el.dataset.alert);
   if ((el = q('[data-trade]'))) return openTrade(el.dataset.trade);
   if ((el = q('[data-chain]'))) { state.chain = el.dataset.chain; renderChains(); renderBoard(); return; }
@@ -1211,8 +1632,8 @@ document.addEventListener('click', e => {
   if (q('#ownerSave')) return saveOwner();
   if (q('#copyAddr')) { navigator.clipboard && navigator.clipboard.writeText(state.agent.agent.address).then(() => toast('Address copied.', 'ok')); return; }
   if (q('#addChain')) { const p = state.wallet.provider || window.ethereum; if (!p) return toast('Open BANDIT in a browser with a wallet to add Robinhood Chain.', 'err'); ensureChain(p).then(() => toast('Robinhood Chain is in your wallet.', 'ok')).catch(err => toast(err.message, 'err')); return; }
-  if (q('#walletBtn')) { if (state.me) { location.hash = '#/my'; return; } return openWelcome(); }
-  if (q('#walletOff')) { state.wallet = { provider: null, info: null, address: null }; store.set('bandit.wallet', null); state.trade.review = null; updateWalletBtn(); renderTrade(); return; }
+  if (q('#walletBtn')) { if (state.me || state.wallet.address) return toggleMenu(); state.pendingWatch = null; return openWelcome(); }
+  if (q('#walletOff')) return disconnect();
   if (q('#tReview')) return reviewTrade();
   if (q('#tSign')) return signTrade();
   if (q('#alertCreate')) return createAlert();
@@ -1223,18 +1644,24 @@ document.addEventListener('change', e => {
   if (e.target.id === 'tMarket') { state.trade.marketId = e.target.value; state.trade.review = null; state.trade.size = num($('#tSize').value) || 10; renderTrade(); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeAll();
+  if (e.key === 'Escape') { closeAll(); closeMenu(); }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row[data-ask]')) { e.preventDefault(); openAsk(e.target.dataset.ask); }
   if (e.key === 'Enter' && e.target.id === 'ownerKey') saveOwner();
 });
 
 /* ---------- init ---------- */
-bindSeg($('#askGoal'));
-bindSeg($('#askRisk'));
 bindSeg($('#alertDir'));
 $('#alertPct').addEventListener('input', e => { $('#alertPctV').textContent = `P${e.target.value}`; });
-$('#askForm').addEventListener('submit', ask);
-$('#askSize').addEventListener('blur', e => { const n = num(e.target.value); if (n > 0) e.target.value = n.toLocaleString('en-US', { maximumFractionDigits: 2 }); });
+$('#askForm').addEventListener('submit', e => { e.preventDefault(); askBandit(); });
+$('#askQ').addEventListener('input', autosize);
+$('#askQ').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askBandit(); } });
+$('#askOpts').addEventListener('click', e => {
+  const b = e.target.closest('.pills [data-v]'); if (!b) return;
+  const group = b.parentElement, k = group.dataset.opt;
+  $$('[data-v]', group).forEach(x => x.classList.toggle('on', x === b));
+  state.ask.opts[k] = k === 'size' ? Number(b.dataset.v) : b.dataset.v;
+  updateOptsSum();
+});
 skeletons();
 route();
 updateWalletBtn();

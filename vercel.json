@@ -23,8 +23,17 @@
     },
     "api/watch-users.js": {
       "maxDuration": 60
+    },
+    "api/share.js": {
+      "maxDuration": 10
     }
   },
+  "rewrites": [
+    {
+      "source": "/a/:id",
+      "destination": "/api/share?id=:id"
+    }
+  ],
   "crons": [
     {
       "path": "/api/watch",

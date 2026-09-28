@@ -34,13 +34,17 @@
   <nav class="tabs" aria-label="Primary">
     <a href="#/" data-route="farm">Home</a>
     <a href="#/bands" data-route="bands">Bands</a>
+    <a href="#/ask" data-route="ask">Ask BANDIT</a>
     <a href="#/my" data-route="my">My agent</a>
     <a href="#/agent" data-route="agent"><i class="dot" id="tabAgentDot"></i>Live agent</a>
     <a href="#/receipts" data-route="receipts">Receipts</a>
   </nav>
   <div class="spacer"></div>
   <div class="pill-live" id="livePill"><i></i><span id="liveText">CONNECTING</span></div>
-  <button class="btn primary sm" id="walletBtn">Get my agent</button>
+  <div class="acct" id="acct">
+    <button class="btn primary sm" id="walletBtn" aria-haspopup="menu" aria-expanded="false">Get my agent</button>
+    <div class="acct-menu" id="acctMenu" role="menu"></div>
+  </div>
 </header>
 
 <main class="shell">
@@ -54,7 +58,7 @@
         <p class="lede">A YT's price moves with its implied APY. BANDIT shows where every Pendle YT sits in its own 90-day range, near the floor with room to run or already at the top, and runs an agent on Robinhood Chain that trades your rules only when SERV Reasoning agrees. Farming points? It prices those too.</p>
         <div class="ctas">
           <a class="btn primary" href="#/agent">Meet the agent <span class="arr">→</span></a>
-          <a class="btn ghost" href="#farm-board">See the ranges</a>
+          <a class="btn ghost" href="#/ask">Ask which YTs are cheap</a>
         </div>
         <div class="stats" id="heroStats">
           <div class="stat"><div class="v lime" data-k="floor"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">Near the floor</div></div>
@@ -130,6 +134,49 @@
     </div>
   </section>
 
+  <!-- ASK BANDIT -->
+  <section class="view" id="view-ask" aria-label="Ask BANDIT">
+    <div class="ask-wrap">
+      <div class="ask-hero">
+        <img class="ask-mascot" src="/art/mascot.svg" alt="">
+        <span class="eyebrow">Ask BANDIT</span>
+        <h1>Find YTs near their <em>floor.</em></h1>
+        <p class="lede">Ask in plain words. BANDIT checks every live Pendle YT against its last 90 days, and SERV Reasoning tells you which ones look cheap, how far they could run, and what could go wrong.</p>
+        <div class="trust"><span>✓ Free</span><span>✓ No wallet needed</span><span>✓ No money moves</span></div>
+      </div>
+      <form class="composer" id="askForm" novalidate>
+        <div class="focus-pill hidden" id="askFocusPill"></div>
+        <div class="cbox">
+          <textarea id="askQ" rows="1" maxlength="600" placeholder="Which YTs are cheap right now?" aria-label="Your question"></textarea>
+          <button class="send" type="submit" id="askBtn" aria-label="Ask BANDIT">↑</button>
+        </div>
+        <details class="ask-opts" id="askOpts">
+          <summary><span id="askOptsSum">Balanced · $1,000 · All chains</span><em>Change</em></summary>
+          <div class="opt-grid">
+            <div class="opt"><span class="fl">How bold?</span><div class="pills" data-opt="risk"><button type="button" data-v="low">Careful</button><button type="button" data-v="medium" class="on">Balanced</button><button type="button" data-v="high">Bold</button></div></div>
+            <div class="opt"><span class="fl">How much?</span><div class="pills" data-opt="size"><button type="button" data-v="100">$100</button><button type="button" data-v="1000" class="on">$1,000</button><button type="button" data-v="10000">$10,000</button></div></div>
+            <div class="opt"><span class="fl">Where?</span><div class="pills" data-opt="chain"><button type="button" data-v="all" class="on">All chains</button><button type="button" data-v="4663">Robinhood Chain</button></div></div>
+          </div>
+          <p class="help">The amount only checks whether that size could get in and out easily. Nothing is traded.</p>
+        </details>
+      </form>
+      <div class="sugg" id="askSugg"></div>
+      <div class="recent" id="askRecent"></div>
+      <div class="ask-feed" id="askFeed" aria-live="polite"></div>
+      <div class="weighs">
+        <div class="sechead"><div><span class="eyebrow">How BANDIT decides</span><h2>What it weighs for every YT</h2></div></div>
+        <div class="weigh-grid">
+          <div class="weigh"><span class="wi lo">◐</span><b>Price vs its history</b><p>Where today's price sits against its last 90 days. Near the floor means cheaper than most of those days.</p></div>
+          <div class="weigh"><span class="wi lime">↗</span><b>Room to run</b><p>What it would gain if it got back to its 90-day high, next to what it would lose at its low.</p></div>
+          <div class="weigh"><span class="wi hi">⧗</span><b>Time left</b><p>A YT fades to zero at its end date, so any move has to happen in time.</p></div>
+          <div class="weigh"><span class="wi">≈</span><b>Easy in, easy out</b><p>Liquidity: whether your amount can get in and out without moving the price.</p></div>
+          <div class="weigh"><span class="wi amber">✺</span><b>Interest right now</b><p>24-hour volume and the 7-day move show where traders are crowding in.</p></div>
+          <div class="weigh"><span class="wi lime">✦</span><b>Points and airdrops</b><p>A bonus on top, never required. Priced when a project publishes a rate, flagged as a guess when it doesn't.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- MY AGENT -->
   <section class="view" id="view-my" aria-label="My agent">
     <div id="myRoot"></div>
@@ -158,41 +205,22 @@
 <nav class="tabbar" aria-label="Primary">
   <a href="#/" data-route="farm"><span class="ti">✦</span>Home</a>
   <a href="#/bands" data-route="bands"><span class="ti">≋</span>Bands</a>
+  <a href="#/ask" data-route="ask" class="tb-ask"><span class="tb-orb"><img src="/art/mascot.svg" alt=""></span>Ask</a>
   <a href="#/my" data-route="my"><span class="ti">◉</span>My agent</a>
   <a href="#/agent" data-route="agent"><span class="ti">☾</span>Live</a>
-  <a href="#/receipts" data-route="receipts"><span class="ti">▤</span>Receipts</a>
 </nav>
 
 <button class="fab" id="fab" aria-label="Ask BANDIT"><img src="/art/mascot.svg" alt=""><span>Ask BANDIT</span></button>
 
 <div class="scrim" id="scrim"></div>
 
-<!-- Ask BANDIT sheet -->
-<aside class="sheet" id="askSheet" aria-label="Ask BANDIT">
-  <div class="sheet-head">
-    <img src="/art/mascot.svg" alt="">
-    <div><h3>Ask BANDIT</h3><p>SERV Reasoning reads the live band and points data for you.</p></div>
-    <button class="x" data-close aria-label="Close">×</button>
-  </div>
-  <div class="sheet-body">
-    <form class="form" id="askForm" novalidate>
-      <div class="row2">
-        <label class="fld"><span class="fl">Position size</span><span class="money"><input class="inp" id="askSize" inputmode="decimal" value="1,000" autocomplete="off"></span></label>
-        <label class="fld"><span class="fl">Markets</span><select class="inp" id="askChain"><option value="all">All chains</option><option value="4663">Robinhood Chain</option><option value="1">Ethereum</option><option value="42161">Arbitrum</option></select></label>
-      </div>
-      <div class="fld"><span class="fl">Goal</span><div class="seg" id="askGoal"><button type="button" data-v="trade" class="on">Trade the range</button><button type="button" data-v="points">Farm points</button><button type="button" data-v="fixed">Fixed rate</button></div></div>
-      <div class="fld"><span class="fl">Risk level</span><div class="seg" id="askRisk"><button type="button" data-v="low" class="lo">Low</button><button type="button" data-v="medium" class="mid on">Medium</button><button type="button" data-v="high" class="hi">High</button></div></div>
-      <label class="fld"><span class="fl">Question<em>optional</em></span><textarea class="inp" id="askQ" rows="2" maxlength="600" placeholder="e.g. Which YTs have the most room to run with at least a month left?"></textarea></label>
-      <input type="hidden" id="askFocus">
-      <div class="err-line hidden" id="askErr"></div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <button class="btn primary" type="submit" id="askBtn">Ask BANDIT <span class="arr">→</span></button>
-        <span class="serv-badge"><span class="sd">S</span>Powered by <b>SERV Reasoning</b></span>
-      </div>
-    </form>
-    <div class="answer" id="answer" aria-live="polite"></div>
-  </div>
-</aside>
+<!-- Share card -->
+<div class="modal wide" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+  <h3 id="shareTitle">Share this read</h3>
+  <p class="sub">A ready-made card for X, Telegram or your group chat. It shows the picks, never your wallet.</p>
+  <div class="share-prev" id="sharePrev"></div>
+  <div class="acts share-acts" id="shareActs"></div>
+</div>
 
 <!-- Trade with BANDIT sheet -->
 <aside class="sheet" id="tradeSheet" aria-label="Trade with BANDIT">

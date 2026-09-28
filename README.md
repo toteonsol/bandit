@@ -16,7 +16,7 @@ Data and reasoning only. Not financial advice.
 - **Home.** Where the YTs sit right now: most room to run, already at the top, biggest 7-day move. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV, each with its range and room to run.
 - **Points.** For airdrop hunters: every YT with a points program, points per day per $100, cost per 1,000 points, decay by maturity and YT leverage.
 - **Band board.** Implied APY placed in its 90-day band: P12 means only 12% of days were lower.
-- **Ask BANDIT.** Enter a size, a goal (trade the range, farm points, fixed rate) and a risk level. SERV Reasoning returns a ranked read with the points math and the main risks.
+- **Ask BANDIT.** Ask in plain words ("Which YTs are near their floor right now?", "Is YT-NVDA a good entry?"). Free, no wallet needed, nothing is traded. SERV Reasoning ranks the YTs and says where each one sits against its own history, how far it could run, and what could go wrong. Every pick has one-tap actions (watch it with your agent, Telegram alert, trade on Robinhood Chain) and every answer gets a share link and an image card.
 - **Telegram alerts.** Pick a market and a band trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
 
 **With your own wallet (Rabby, MetaMask, any browser wallet)**
@@ -54,7 +54,7 @@ For a YT held to maturity, per $1 spent:
 Three places, all through the OpenAI SDK against `https://inference-api.openserv.ai/v1` (model `gpt-5.4-mini`, strict `json_schema` output):
 
 1. **Risk gate.** Before the agent acts, or before a user signs, SERV weighs band position, points cost, decay, liquidity and the live price impact. It returns `confirm` or `reject` with a headline and a plain-language reason, for example "cheapest points on the board, but only 9 days left, so decay is fast". Only a confirmed trigger proceeds, and the code still enforces the hard caps on top.
-2. **Ask BANDIT.** A ranked read for the user's size, goal and risk level.
+2. **Ask BANDIT.** A ranked, plain-language read of the live board for the user's question, size and risk level. Answers are saved for 30 days so they can be shared by link.
 3. **Alerts.** A short read attached to each Telegram alert.
 
 There is no fallback model. If SERV fails, the agent does nothing and the UI says so.
@@ -72,7 +72,8 @@ There is no fallback model. If SERV fails, the agent does nothing and the UI say
 ```
 public/            index.html, app.css, app.js, art/ (illustrations)
 api/markets.js     GET  live Pendle markets, bands, points economics (cached 5 min)
-api/ask.js         POST Ask BANDIT (SERV Reasoning)
+api/ask.js         POST Ask BANDIT (SERV Reasoning); GET a saved answer by id
+api/share.js       GET  /a/<id> share links with preview tags for X and Telegram
 api/agent.js       GET  agent status, rules, receipts, ledger, last run trace; POST rules, run now, alerts
 api/watch.js       GET  scheduled watcher (Vercel cron, every 10 minutes)
 api/trade.js       POST Trade with BANDIT: quote plus SERV review for a user's own wallet
