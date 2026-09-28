@@ -2,7 +2,7 @@
 // for the user's own wallet, has SERV Reasoning review it, and returns the transaction for the user to sign.
 // BANDIT never holds user funds on this path.
 import { reviewUserTrade } from '../lib/agent.js';
-import { rateLimited } from '../lib/store.js';
+import { rateLimited, takePublicServBudget } from '../lib/store.js';
 
 const json = (status, body) => new Response(JSON.stringify(body), {
   status,
@@ -16,6 +16,7 @@ export async function POST(request) {
   } catch {}
   let body;
   try { body = await request.json(); } catch { return json(400, { error: 'Send JSON with marketId, usd, and address.' }); }
+  if (!(await takePublicServBudget().catch(() => true))) return json(429, { error: 'BANDIT reached its daily SERV Reasoning budget. Try again tomorrow.' });
   try {
     return json(200, await reviewUserTrade(body));
   } catch (e) {

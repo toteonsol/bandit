@@ -2,7 +2,7 @@
 // There is no fallback model: if SERV fails, the UI says so.
 import { getMarkets, CHAINS } from '../lib/pendle.js';
 import { servJSON, servReady, undash, SERV_MODEL } from '../lib/serv.js';
-import { rateLimited } from '../lib/store.js';
+import { rateLimited, takePublicServBudget } from '../lib/store.js';
 
 const MAX_MARKETS = 20;
 const RISK_LEVELS = ['low', 'medium', 'high'];
@@ -140,6 +140,8 @@ export async function POST(request) {
   const focus = String(input.marketId || '');
   if (!(sizeUsd > 0 && sizeUsd <= 1e10)) return json(400, { error: 'Position size must be a positive USD amount.' });
   if (!RISK_LEVELS.includes(risk)) return json(400, { error: 'Risk level must be low, medium, or high.' });
+
+  if (!(await takePublicServBudget().catch(() => true))) return json(429, { error: 'BANDIT reached its daily SERV Reasoning budget for public questions. Try again tomorrow.' });
 
   let data;
   try { data = await getMarkets(); } catch (e) { return json(502, { error: `Could not load Pendle data: ${e.message}` }); }

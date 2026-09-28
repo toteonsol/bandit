@@ -230,6 +230,7 @@ function skeletons() {
 let agentTimer = null;
 async function loadAgent() {
   clearTimeout(agentTimer);
+  if (document.hidden) { agentTimer = setTimeout(loadAgent, 60_000); return; }
   try {
     const a = await api('/api/agent');
     state.agent = a;
@@ -241,7 +242,7 @@ async function loadAgent() {
   } catch (e) {
     if (state.route === 'agent' && !state.agent) $('#agentRoot').innerHTML = `<div class="card board-msg">Could not load the agent: ${esc(e.message)}</div>`;
   }
-  if (state.route === 'agent' || state.route === 'receipts') agentTimer = setTimeout(loadAgent, 20_000);
+  if (state.route === 'agent' || state.route === 'receipts') agentTimer = setTimeout(loadAgent, 60_000);
 }
 function agentMode(a) {
   if (!a.ready.store || !a.ready.serv || !a.ready.wallet) return { cls: 'setup', text: 'Setting up' };
@@ -878,6 +879,7 @@ async function signInWith(p) {
 
 async function loadMe() {
   clearTimeout(meTimer);
+  if (document.hidden && state.meStatus) { meTimer = setTimeout(loadMe, 60_000); return; }
   if (state.route !== 'my') return;
   if (!state.me) { renderMy(); return; }
   try {
@@ -895,7 +897,7 @@ async function loadMe() {
   } catch (e) {
     if (!state.me) renderMy(); else toast(e.message, 'err');
   }
-  if (state.route === 'my') meTimer = setTimeout(loadMe, 20_000);
+  if (state.route === 'my') meTimer = setTimeout(loadMe, 60_000);
 }
 
 function myRuleBuilderHtml() {
@@ -1102,5 +1104,6 @@ $('#askSize').addEventListener('blur', e => { const n = num(e.target.value); if 
 skeletons();
 route();
 loadMarkets();
-setInterval(loadMarkets, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden) loadMarkets(); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && (state.route === 'agent' || state.route === 'receipts')) loadAgent(); });
 api('/api/agent').then(a => { state.agent = a; updateAgentChrome(); renderFarm(); }).catch(() => {});
