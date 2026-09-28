@@ -116,43 +116,49 @@ function shareUrl(m) {
 }
 
 // mode 'trade' leads with room to run; mode 'points' leads with cost per 1,000 points.
+const SHARE_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>';
 function marketCard(m, rank, mode = 'trade') {
-  const p = m.points || {};
+  const p = m.points || {}, gr = entryGrade(m), r = m.range, d = span(m);
   const c = cost(p.costPer1k);
-  const decay = p.decayCostRatio == null ? 'n/a' : `${Math.max(0, Math.round(p.decayCostRatio * 100))}%`;
-  let big, bigK, kpis;
+  let v, vCls, k, stats;
   if (mode === 'points') {
-    big = p.rate == null ? '<span class="v unknown">Rate unknown</span>' : c === 'Free' ? '<span class="v free">Free</span>' : `<span class="v">${c}</span>`;
-    bigK = 'per 1,000 pts';
-    kpis = [[p.ptsPerDay100 != null ? compact(p.ptsPerDay100) : 'n/a', 'pts/day per $100'], [decay, 'decays by maturity'], [m.leverage ? Math.round(m.leverage) + 'x' : 'n/a', 'YT leverage']];
+    v = p.rate == null ? 'Rate unknown' : c; vCls = p.rate == null ? 'muted' : c === 'Free' ? 'up' : '';
+    k = p.rate == null ? 'no published points rate' : 'to earn 1,000 points, if held to the end';
+    const decay = p.decayCostRatio == null ? 'n/a' : `${Math.max(0, Math.round(p.decayCostRatio * 100))}%`;
+    stats = [[p.ptsPerDay100 != null ? compact(p.ptsPerDay100) : 'n/a', 'points a day per $100'], [decay, 'fades by the end'], [`${m.daysToMaturity}`, 'days left']];
   } else {
-    const r = m.range;
-    big = r ? `<span class="v ${r.toHigh <= 0.005 ? 'unknown' : 'free'}">${r.toHigh <= 0.005 ? 'At high' : upPct(r.toHigh)}</span>` : `<span class="v unknown" style="font-size:16px">${m.band.status === 'forming' ? 'Band forming' : 'No range yet'}</span>`;
-    bigK = r ? (r.toHigh <= 0.005 ? 'no room left to its 90d high' : 'if the rate returns to its 90d high') : `day ${m.band.days} of 14`;
-    kpis = [[r ? upPct(r.toLow) : 'n/a', 'to its 90d low'], [`${m.daysToMaturity}d`, 'left to run'], [m.leverage ? Math.round(m.leverage) + 'x' : 'n/a', 'YT leverage']];
+    v = r ? (r.toHigh > 0.005 ? upPct(r.toHigh) : 'At its high') : 'Too new'; vCls = r ? (r.toHigh > 0.005 ? 'up' : 'top') : 'muted';
+    k = r ? (r.toHigh > 0.005 ? `if it gets back to its ${d}-day high` : `no room left to its ${d}-day high`) : `day ${m.band.days} of the 14 BANDIT needs`;
+    stats = [[r ? upPct(r.toLow) : 'n/a', 'at its low'], [`${m.daysToMaturity}`, 'days left'], [m.leverage ? `${Math.round(m.leverage)}x` : 'n/a', 'leverage']];
   }
-  const pointsBadge = p.status === 'confirmed points' && p.program ? `<span class="badge plain none">${esc(p.program)}${p.multiplier ? ` ${p.multiplier}x` : ''}</span>` : '';
+  const chips = [
+    mode === 'points' || m.chainId !== RH ? `<span class="badge chain c${m.chainId}">${esc(chainShort(m))}</span>` : '',
+    p.status !== 'none known' ? `<span class="badge ${statusCls(p.status)}">${p.status === 'confirmed points' && p.program ? `${esc(p.program)}${p.multiplier ? ` ${p.multiplier}x` : ''}` : statusLabel(p.status)}</span>` : '',
+    m.distorted ? `<span class="badge distorted">${esc(riskyWhy(m).replace('Risky: ', ''))}</span>` : '',
+  ].join('');
   return `<article class="card mcard ${m.distorted ? 'distorted' : ''}" data-id="${esc(m.id)}">
     ${rank ? `<span class="rank-no">${rank}</span>` : ''}
     <div class="top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>
-      <div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(p.project || m.protocol || 'Pendle')} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d left</div></div></div>
-    <div class="badges">${(gr => `<span class="gchip g-${gr.k}" title="${esc(gr.label)}">${gr.score >= 0 ? `Grade ${gr.g}` : gr.g}</span>`)(entryGrade(m))}<span class="badge chain c${m.chainId}">${esc(m.chainName)}</span>${mode === 'points' || p.status !== 'none known' ? `<span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>` : ''}${pointsBadge}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
-    <div class="big">${big}<span class="k">${bigK}</span></div>
-    <div class="kpis">${kpis.map(([v, k]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
-    <div>${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div></div>
+      <div class="mc-name"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(chainShort(m))} · ends ${shortDate(m.expiry)}</div></div>
+      <span class="gchip g-${gr.k}" title="${esc(gr.label)}">${gr.score >= 0 ? `Grade ${gr.g}` : gr.g}</span></div>
+    <div class="big"><span class="v ${vCls}">${esc(v)}</span><span class="k">${esc(k)}</span></div>
+    ${gaugeHtml(m)}
+    ${formed(m) && m.band.percentile < 97 && m.band.percentile > 3 ? `<p class="where">${esc(whereLine(m))}</p>` : ''}
+    <div class="mstats">${stats.map(([sv, sk]) => `<div><b>${esc(sv)}</b><span>${esc(sk)}</span></div>`).join('')}</div>
+    ${chips ? `<div class="badges">${chips}</div>` : ''}
     ${p.note && mode === 'trade' && m.chainId === RH ? `<p class="note">${clean(p.note)}</p>` : ''}
-    <div class="acts"><button class="btn soft xs" data-ask="${esc(m.id)}">Ask BANDIT</button><button class="btn soft xs" data-alert="${esc(m.id)}">Alert me</button>${tradable(m) ? `<button class="btn primary xs" data-trade="${esc(m.id)}">Trade</button>` : ''}${p.guideUrl ? `<a class="guide" href="${esc(p.guideUrl)}" target="_blank" rel="noopener">Read the guide →</a>` : ''}<a class="btn soft xs" href="${shareUrl(m)}" target="_blank" rel="noopener">Share</a></div>
+    <div class="acts">${tradable(m) ? `<button class="btn primary xs" data-trade="${esc(m.id)}">Trade</button>` : ''}<button class="btn soft xs" data-ask="${esc(m.id)}">Ask BANDIT</button><button class="btn soft xs" data-alert="${esc(m.id)}">Alert me</button>${p.guideUrl ? `<a class="guide" href="${esc(p.guideUrl)}" target="_blank" rel="noopener">Guide</a>` : ''}<a class="btn soft xs icon" href="${shareUrl(m)}" target="_blank" rel="noopener" aria-label="Share on X" title="Share on X">${SHARE_ICON}</a></div>
   </article>`;
 }
 
 function signalCard(cls, eyebrow, m, headline, body) {
   return `<article class="card sig ${cls}" data-ask="${esc(m.id)}"><div class="glow"></div>
     <div class="eyebrow-s"><span class="pip"></span>${eyebrow}</div>
-    <div class="sig-top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(m.chainName)} · ${m.daysToMaturity}d left · ${usd(m.liquidityUsd)}</div></div></div>
+    <div class="sig-top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div class="mc-name"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(chainShort(m))} · ${m.daysToMaturity} days left · ${usd(m.liquidityUsd)} pool</div></div>${(gr => `<span class="gchip g-${gr.k}">${gr.score >= 0 ? `Grade ${gr.g}` : gr.g}</span>`)(entryGrade(m))}</div>
     <div class="sig-big">${headline}</div>
-    ${bandHtml(m)}
+    ${gaugeHtml(m)}
     <p class="why">${body}</p>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto"><span class="cta">Ask BANDIT about it <span class="arr">→</span></span><a class="btn soft xs" href="${shareUrl(m)}" target="_blank" rel="noopener">Share on X</a></div></article>`;
+    <div class="sig-foot"><span class="cta">Ask BANDIT about it <span class="arr">→</span></span><a class="btn soft xs icon" href="${shareUrl(m)}" target="_blank" rel="noopener" aria-label="Share on X" title="Share on X">${SHARE_ICON}</a></div></article>`;
 }
 
 function renderSignals() {
@@ -161,9 +167,12 @@ function renderSignals() {
   const top = [...ranged].sort((a, b) => b.band.percentile - a.band.percentile || b.liquidityUsd - a.liquidityUsd).find(m => m.chainId === RH) || [...ranged].sort((a, b) => b.band.percentile - a.band.percentile)[0];
   const mover = state.data.markets.filter(m => m.change7d != null && !m.distorted && m !== room && m !== top).sort((a, b) => Math.abs(b.change7d) - Math.abs(a.change7d))[0];
   const cards = [];
-  if (room) cards.push(signalCard('lo', 'Most room to run', room, `${upPct(room.range.toHigh)} <small>to its 90-day high</small>`, `Implied APY <b>${pct(room.impliedApy)}</b> sits at <b>P${Math.round(room.band.percentile)}</b>, near the floor of its band. Back to the high is <b>${upPct(room.range.toHigh)}</b>; back to the low is <b>${upPct(room.range.toLow)}</b>, with ${room.daysToMaturity} days for the move before decay.`));
-  if (top) cards.push(signalCard('hi', 'Already at the top', top, `${upPct(top.range.toLow)} <small>to its 90-day low</small>`, `Implied APY <b>${pct(top.impliedApy)}</b> sits at <b>P${Math.round(top.band.percentile)}</b>${top.range.toHigh <= 0.005 ? ', its 90-day high' : ''}. Little room left above and <b>${upPct(top.range.toLow)}</b> back to the low. Holders sit on the gain; new entries pay the top of the range.`));
-  if (mover) cards.push(signalCard('move', 'Biggest 7-day move', mover, `${mover.change7d > 0 ? '+' : ''}${(mover.change7d * 100).toFixed(2)}pp <small>implied APY in 7 days</small>`, `Implied APY moved to <b>${pct(mover.impliedApy)}</b>${formed(mover) ? `, now <b>P${Math.round(mover.band.percentile)}</b> of its band` : ''}. YT prices move with the rate, so a fast move is where traders and points speculators crowd in.`));
+  if (room) cards.push(signalCard('lo', 'Most room to run', room, `${upPct(room.range.toHigh)} <small>if it gets back to its high</small>`,
+    `<b>${esc(whereLine(room))}.</b> Back at its high it would be worth <b>${upPct(room.range.toHigh)}</b>; at its low, <b>${upPct(room.range.toLow)}</b>. It has ${room.daysToMaturity} days for the move.`));
+  if (top) cards.push(signalCard('hi', 'Already at the top', top, top.range.toHigh <= 0.005 ? `At its high <small>${upPct(top.range.toLow)} if it drops to its low</small>` : `${upPct(top.range.toLow)} <small>if it drops to its low</small>`,
+    `<b>${esc(whereLine(top))}.</b> People buying now pay the top of its range, and holders are sitting on the gain.`));
+  if (mover) cards.push(signalCard('move', 'Biggest move this week', mover, `${pct(mover.impliedApy)} <small>yield rate, from ${pct(mover.impliedApy - mover.change7d)} a week ago</small>`,
+    `Its yield rate ${mover.change7d > 0 ? 'rose' : 'fell'} to <b>${pct(mover.impliedApy)}</b> in 7 days${formed(mover) ? `, and it is now <b>${esc(whereLine(mover).toLowerCase())}</b>` : ''}. A YT's price moves with its rate, so fast moves draw traders in.`));
   $('#signals').innerHTML = cards.join('');
   readyUp($('#signals'));
 }
@@ -938,7 +947,7 @@ function pickStats(m) {
   ];
 }
 const statsHtml = m => `<div class="ph-stats">${pickStats(m).map(([b, s, c]) => `<div><b class="${c}">${esc(b)}</b><span>${esc(s)}</span></div>`).join('')}</div>`;
-const gaugeHtml = m => `<div class="gz">${bandHtml(m, { labels: false })}<div class="gz-l"><span>Cheapest in ${span(m)} days</span><span>Priciest</span></div></div>`;
+const gaugeHtml = m => `<div class="gz">${bandHtml(m, { labels: false })}<div class="gz-l">${formed(m) ? `<span>Cheapest in ${span(m)} days</span><span>Priciest</span>` : `<span>Range still forming</span><span>day ${m.band.days} of 14</span>`}</div></div>`;
 
 function pickActsHtml(m, p, j) {
   const watching = state.watching.has(m.id);
