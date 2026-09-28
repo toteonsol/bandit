@@ -377,10 +377,10 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
         x += w;
       }
     }
-    ctx.font = `700 13px ${FONT.mono}`; const ww = ctx.measureText('bandit-bands.vercel.app').width + 36;
+    ctx.font = `700 13px ${FONT.mono}`; const ww = ctx.measureText('bandit.web3wikis.com').width + 36;
     const fade = ctx.createLinearGradient(W - ww - 40, 0, W - ww, 0); fade.addColorStop(0, 'rgba(6,8,6,0)'); fade.addColorStop(1, '#060806');
     ctx.fillStyle = fade; ctx.fillRect(W - ww - 40, y + 1, 40, h - 1); ctx.fillStyle = '#060806'; ctx.fillRect(W - ww, y + 1, ww, h - 1);
-    txt('bandit-bands.vercel.app', W - 18, y + h / 2, 13, FONT.mono, C.lime, 'right', 700);
+    txt('bandit.web3wikis.com', W - 18, y + h / 2, 13, FONT.mono, C.lime, 'right', 700);
   }
   // Title and end cards for recorded clips.
   function drawTitle(x, w, h, k) {
@@ -418,7 +418,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     x.fillStyle = cap.tone === 'no' ? C.hi : color; x.textAlign = 'center'; x.fillText(chip, 84 + cw / 2, top + 29); x.textAlign = 'left';
     x.font = `600 50px ${FONT.ui}`; x.fillStyle = C.text;
     wrap(x, undash(cap.text), TW - 168, 5).forEach((l, i) => x.fillText(l, 84, top + 130 + i * 66));
-    x.font = `700 34px ${FONT.mono}`; x.fillStyle = C.lime; x.fillText('bandit-bands.vercel.app', 84, TH - 170);
+    x.font = `700 34px ${FONT.mono}`; x.fillStyle = C.lime; x.fillText('bandit.web3wikis.com', 84, TH - 170);
     x.font = `500 26px ${FONT.ui}`; x.fillStyle = C.text3; x.fillText('Built on SERV Reasoning · Data and reasoning only. Not financial advice.', 84, TH - 118);
     drawTitle(x, TW, TH, 1.9);
   }
@@ -535,7 +535,7 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
       await play(run);
       await sleep(900);
       if (onPhase) onPhase('outro');
-      S.title = { text: 'Your YT agent, while you sleep', sub: 'bandit-bands.vercel.app', t0: S.t, dur: 2.2 };
+      S.title = { text: 'Your YT agent, while you sleep', sub: 'bandit.web3wikis.com', t0: S.t, dur: 2.2 };
       await sleep(2300);
     } finally {
       S.title = null;

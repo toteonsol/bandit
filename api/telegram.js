@@ -7,7 +7,7 @@ export async function POST(request) {
   if (!telegramReady() || !webhookAuthorized(request)) return new Response('unauthorized', { status: 401 });
   const update = await request.json().catch(() => null);
   try {
-    await handleUpdate(update, { linkRule, unlinkChat, linkUser: linkUserChat, siteUrl: process.env.PUBLIC_URL || 'https://bandit-bands.vercel.app' });
+    await handleUpdate(update, { linkRule, unlinkChat, linkUser: linkUserChat, siteUrl: process.env.PUBLIC_URL || 'https://bandit.web3wikis.com' });
   } catch (e) {
     console.error('telegram update failed:', e.message);
   }

@@ -2,7 +2,7 @@
 
 **The YT trading agent that works while you sleep.**
 
-Live app: https://bandit-bands.vercel.app
+Live app: https://bandit.web3wikis.com
 Code: https://github.com/toteonsol/bandit
 Track: Mainnet & MCP (Robinhood Chain), OpenServ SERV Hackathon Edition 01
 

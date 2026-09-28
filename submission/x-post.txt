@@ -6,7 +6,7 @@ BANDIT: the YT trading agent that works while you sleep.
 
 It grades every Pendle YT for entry, tells you in plain words which ones sit near their floor, and trades your rules on Robinhood Chain only when @openservai SERV Reasoning agrees.
 
-https://bandit-bands.vercel.app
+https://bandit.web3wikis.com
 
 
 THREAD VERSION (4 posts, each under 280)
@@ -32,7 +32,7 @@ Watch it work live, stream it, or clip it.
 4/4 (202)
 Real trades on Robinhood Chain: top up in one signature from Base or Arbitrum, approve with one tap, hard caps in code. Not financial advice.
 
-Live: https://bandit-bands.vercel.app
+Live: https://bandit.web3wikis.com
 Code: https://github.com/toteonsol/bandit
 [attach screenshot-1-home.png]
 (If the repo is private, remove the Code line.)

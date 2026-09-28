@@ -1,5 +1,5 @@
 BANDIT DEMO SCRIPT (about 100 seconds)
-Record at 1440 x 900 on https://bandit-bands.vercel.app in Chrome, with Rabby installed.
+Record at 1440 x 900 on https://bandit.web3wikis.com in Chrome, with Rabby installed.
 
 BEFORE YOU RECORD
 1. Warm up SERV once: on Ask BANDIT, tap any suggestion and wait for the answer.

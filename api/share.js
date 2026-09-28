@@ -2,7 +2,7 @@
 // answer, so a shared link previews the answer on X and Telegram, then sends people on to it in the app.
 import { storeReady, redis } from '../lib/store.js';
 
-const SITE = (process.env.PUBLIC_URL || 'https://bandit-bands.vercel.app').replace(/\/$/, '');
+const SITE = (process.env.PUBLIC_URL || 'https://bandit.web3wikis.com').replace(/\/$/, '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function verdict(m) {

@@ -21,6 +21,7 @@ const formed = m => m.band && m.band.status === 'formed';
 const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - Date.parse(iso)) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`; };
 const shortAddr = a => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '';
 const RH = 4663;
+const SITE_URL = 'https://bandit.web3wikis.com'; // the canonical address for anything people share
 const ICONS = {"check":"<path d=\"M20 6 9 17l-5-5\"/>","scan":"<circle cx=\"12\" cy=\"12\" r=\"8.5\" stroke-dasharray=\"3.2 3.2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>","pause":"<path d=\"M9 5.5v13M15 5.5v13\"/>","ban":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"m6 6 12 12\"/>","alert":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5v5.5M12 16.4v.1\"/>","send":"<path d=\"M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z\"/>","flag":"<path d=\"M5.5 21V4M5.5 4.5h11l-2.2 4 2.2 4h-11\"/>","spark":"<path d=\"M12 3.5 13.9 10.1 20.5 12l-6.6 1.9L12 20.5l-1.9-6.6L3.5 12l6.6-1.9z\"/>","pen":"<path d=\"M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z\"/><path d=\"m13.5 6.5 4 4\"/>","user":"<circle cx=\"12\" cy=\"8.5\" r=\"4\"/><path d=\"M4.5 20.5a7.5 7.5 0 0 1 15 0\"/>","copy":"<rect x=\"9\" y=\"9\" width=\"11.5\" height=\"11.5\" rx=\"2.2\"/><path d=\"M5.5 15V5.7a2.2 2.2 0 0 1 2.2-2.2H15\"/>","swap":"<path d=\"M7 7.5h13l-3.5-3.5M17 16.5H4l3.5 3.5\"/>","power":"<path d=\"M12 3v8.5M17.8 6.8a8 8 0 1 1-11.6 0\"/>","down":"<path d=\"m3.5 7 6.5 6.5 3.5-3.5 7 7\"/><path d=\"M20.5 11.5V17h-5.5\"/>","up":"<path d=\"m3.5 17 6.5-6.5 3.5 3.5 7-7\"/><path d=\"M20.5 12.5V7h-5.5\"/>","target":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><circle cx=\"12\" cy=\"12\" r=\"4.5\"/><circle cx=\"12\" cy=\"12\" r=\".8\" fill=\"currentColor\"/>","link":"<path d=\"M10 14a4.5 4.5 0 0 0 6.4 0l3.1-3.1a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3.1 3.1a4.5 4.5 0 0 0 6.4 6.4l1-1\"/>","gauge":"<path d=\"M12 14.5 16 10M3.6 17.5a9 9 0 1 1 16.8 0\"/>","clock":"<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>","drop":"<path d=\"M12 3s6.2 6.8 6.2 11a6.2 6.2 0 0 1-12.4 0C5.8 9.8 12 3 12 3z\"/>","flame":"<path d=\"M12 21c3.9 0 6.5-2.6 6.5-6.4 0-4.7-4.4-6.6-4.4-11.1-2.8 1.8-3.8 4.6-3.8 6.6-.9-.8-1.7-1.8-1.9-3.6-1.9 1.8-2.9 4.6-2.9 8.1 0 3.8 2.6 6.4 6.5 6.4z\"/>","moon":"<path d=\"M19.5 14.5A7.8 7.8 0 1 1 9.5 4.5a6.3 6.3 0 0 0 10 10z\"/>","wallet":"<rect x=\"3.5\" y=\"6\" width=\"17\" height=\"13\" rx=\"2.5\"/><path d=\"M3.5 9.5h17M15.5 14h2\"/>"};
 const ic = (name, size = 16) => `<svg class="i" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 const chainShort = m => ({ 4663: 'Robinhood', 1: 'Ethereum', 42161: 'Arbitrum' })[m.chainId] || m.chainName;
@@ -113,7 +114,7 @@ const rangeLine = m => m.range ? `${upPct(m.range.toHigh)} to its 90-day high ·
 
 // Pre-written X post with this YT's live numbers. Descriptive only, like the rest of BANDIT.
 function shareUrl(m) {
-  const site = 'https://bandit-bands.vercel.app';
+  const site = SITE_URL;
   let text;
   if (m.range && m.range.toHigh > 0.005) text = `YT-${m.name} sits at P${Math.round(m.band.percentile)} of its 90-day range: ${upPct(m.range.toHigh)} if its rate returns to its high, ${upPct(m.range.toLow)} to its low, ${m.daysToMaturity} days left.`;
   else if (m.range) text = `YT-${m.name} sits at its 90-day high (P${Math.round(m.band.percentile)}): ${upPct(m.range.toLow)} back to its low.`;
@@ -536,7 +537,7 @@ async function recordClip(format) {
     const canShare = Boolean(navigator.canShare && navigator.canShare({ files: [file] }));
     $('#clipBody').innerHTML = `<video class="clip-vid ${format}" src="${state.clip.url}" controls autoplay muted loop playsinline></video>
       <p class="help" style="margin-top:10px">${ext === 'mp4' ? 'Ready to post. Attach the video to your post on X, TikTok or Instagram.' : 'Saved as WebM. X needs MP4: Chrome 126 or later and Safari record MP4 directly.'}</p>`;
-    $('#clipActs').innerHTML = `${canShare ? '<button class="btn primary sm" data-clipshare>Share</button>' : ''}<button class="btn ${canShare ? 'soft' : 'primary'} sm" data-clipsave>Download .${ext}</button><a class="btn soft sm" href="${xIntent('My YT agent at work on Robinhood Chain. Every move checked by @openservai SERV Reasoning.', location.origin)}" target="_blank" rel="noopener">Post on X</a><button class="btn soft sm" data-close>Close</button>`;
+    $('#clipActs').innerHTML = `${canShare ? '<button class="btn primary sm" data-clipshare>Share</button>' : ''}<button class="btn ${canShare ? 'soft' : 'primary'} sm" data-clipsave>Download .${ext}</button><a class="btn soft sm" href="${xIntent('My YT agent at work on Robinhood Chain. Every move checked by @openservai SERV Reasoning.', SITE_URL)}" target="_blank" rel="noopener">Post on X</a><button class="btn soft sm" data-close>Close</button>`;
     openLayer('#clipModal');
   } catch (e) {
     toast(`Could not record: ${e.message}`, 'err');
@@ -831,7 +832,7 @@ function rememberAsk(j) {
   store.set('bandit.asks', JSON.stringify([{ id: j.id, q: j.question, at: j.at }, ...askRecent().filter(x => x.id !== j.id)].slice(0, 6)));
 }
 const findAnswer = id => (state.ask.feed.find(x => x.j && x.j.id === id) || {}).j;
-const answerLink = j => `${location.origin}/a/${j.id}`;
+const answerLink = j => `${SITE_URL}/a/${j.id}`;
 const xIntent = (text, url) => `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
 const clip = (s, n) => s.length > n ? `${s.slice(0, n - 1).replace(/[\s,.;:]+$/, '')}…` : s;
 const withTag = lead => `${clip(lead, 205)}\n\nRead live by @openservai SERV Reasoning.`;
@@ -962,7 +963,7 @@ function pickActsHtml(m, p, j) {
     ${m.distorted ? '' : watching ? '<a class="btn sm watching" href="#/my">✓ Your agent is watching</a>' : `<button class="btn primary sm" data-watch="${esc(m.id)}">Watch it with my agent</button>`}
     <button class="btn soft sm" data-alert="${esc(m.id)}">Alert me on Telegram</button>
     ${state.byId.has(m.id) && tradable(state.byId.get(m.id)) ? `<button class="btn soft sm" data-trade="${esc(m.id)}">Trade it</button>` : ''}
-    <a class="btn soft sm" href="${xIntent(pickShareText(p), j.id ? answerLink(j) : location.origin)}" target="_blank" rel="noopener">Share</a>
+    <a class="btn soft sm" href="${xIntent(pickShareText(p), j.id ? answerLink(j) : SITE_URL)}" target="_blank" rel="noopener">Share</a>
   </div>`;
 }
 function pickBodyHtml(p, m, j) {
@@ -1176,7 +1177,7 @@ async function answerImage(j) {
   x.strokeStyle = 'rgba(234,238,218,0.12)'; x.lineWidth = 2; x.beginPath(); x.moveTo(P, footTop); x.lineTo(W - P, footTop); x.stroke();
   x.textBaseline = 'alphabetic';
   x.fillStyle = '#C8F25A'; x.font = '600 26px "Geist Mono"';
-  x.fillText(location.hostname === 'localhost' ? 'bandit-bands.vercel.app' : location.host, P, footTop + 56);
+  x.fillText('bandit.web3wikis.com', P, footTop + 56);
   x.fillStyle = '#6E7263'; x.font = '500 20px "Geist"'; x.fillText('Data and reasoning only. Not financial advice.', P, footTop + 92);
   x.textAlign = 'right';
   x.fillStyle = '#A7AB9A'; x.font = '600 21px "Geist"'; x.fillText('The YT trading agent that works while you sleep', W - P, footTop + 56);

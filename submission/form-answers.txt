@@ -39,7 +39,7 @@ Why it has revenue potential:
 YT is Pendle's most speculative instrument and the least understood. BANDIT turns it into a grade anyone can read and an agent that trades it, and every answer and clip is shareable, so growth is built in. Revenue comes from a Pro tier (more rules, faster checks, more chains, real-money agents with larger caps), a small fee per agent trade, and a small fee on in-app top-ups. Payments can settle in USDG on Robinhood Chain through SUMMON, our x402 facilitator that is already live there, so users pay by signing in their own wallet with no custody. Next come smart accounts with capped session keys, so every user's agent can trade real money on its own without handing over keys.
 
 Project link (live demo):
-https://bandit-bands.vercel.app
+https://bandit.web3wikis.com
 
 GitHub:
 https://github.com/toteonsol/bandit
