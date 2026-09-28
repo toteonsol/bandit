@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none">
+  <defs>
+    <linearGradient id="step-rule-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#20251A"/>
+      <stop offset="1" stop-color="#171A12"/>
+    </linearGradient>
+    <radialGradient id="step-rule-glow">
+      <stop offset="0" stop-color="#C8F25A" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#C8F25A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- card -->
+  <rect x="18" y="24" width="164" height="114" rx="16" fill="#0A0B08" opacity=".45" transform="translate(0 4)"/>
+  <rect x="18" y="24" width="164" height="114" rx="16" fill="url(#step-rule-card)"/>
+  <rect x="18.5" y="24.5" width="163" height="113" rx="15.5" stroke="#EAEEDA" stroke-opacity=".12"/>
+  <!-- label lines -->
+  <rect x="34" y="42" width="64" height="8" rx="4" fill="#EAEEDA" opacity=".6"/>
+  <rect x="34" y="56" width="40" height="6" rx="3" fill="#EAEEDA" opacity=".22"/>
+  <!-- toggle (on) -->
+  <rect x="136" y="41" width="32" height="18" rx="9" fill="#C8F25A"/>
+  <circle cx="159" cy="50" r="6.5" fill="#0A0B08"/>
+  <!-- range bar -->
+  <rect x="38" y="99" width="124" height="6" rx="3" fill="#EAEEDA" opacity=".12"/>
+  <rect x="38" y="99" width="46" height="6" rx="3" fill="#C8F25A" opacity=".32"/>
+  <rect x="35" y="88" width="5" height="28" rx="2.5" fill="#5B9DFF"/>
+  <rect x="160" y="88" width="5" height="28" rx="2.5" fill="#FF8A4C"/>
+  <path d="M84 84V124" stroke="#C8F25A" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3.2 3.6"/>
+  <path d="M78.5 74.5H89.5C90.6 74.5 91.2 75.8 90.5 76.6L85.1 82.2C84.5 82.8 83.5 82.8 82.9 82.2L77.5 76.6C76.8 75.8 77.4 74.5 78.5 74.5Z" fill="#C8F25A"/>
+  <circle cx="62" cy="102" r="15" fill="url(#step-rule-glow)"/>
+  <circle cx="62" cy="102" r="7" fill="#C8F25A" stroke="#0A0B08" stroke-width="2.5"/>
+  <!-- tick labels -->
+  <rect x="30" y="122" width="16" height="4" rx="2" fill="#5B9DFF" opacity=".45"/>
+  <rect x="154" y="122" width="16" height="4" rx="2" fill="#FF8A4C" opacity=".45"/>
+  <!-- sparkle -->
+  <path d="M184 14Q184 20 190 20Q184 20 184 26Q184 20 178 20Q184 20 184 14Z" fill="#C8F25A"/>
+  <path d="M12 134Q12 138 16 138Q12 138 12 142Q12 138 8 138Q12 138 12 134Z" fill="#F4F1DE" opacity=".6"/>
+</svg>

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 160" fill="none">
+  <defs>
+    <radialGradient id="step-sleep-moonglow">
+      <stop offset="0" stop-color="#F4F1DE" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#F4F1DE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="step-sleep-glow">
+      <stop offset="0" stop-color="#C8F25A" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#C8F25A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="step-sleep-face" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E0FA8C"/>
+      <stop offset="1" stop-color="#C2E858"/>
+    </linearGradient>
+    <linearGradient id="step-sleep-trail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C8F25A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#C8F25A" stop-opacity=".5"/>
+    </linearGradient>
+    <g id="step-sleep-coin">
+      <path d="M-15 0V6A15 5 0 0 0 15 6V0Z" fill="#94BF30"/>
+      <ellipse rx="15" ry="5" fill="url(#step-sleep-face)"/>
+    </g>
+    <clipPath id="step-sleep-tailclip">
+      <path d="M150 121.5C160 121.5 166 120 170 117C174 114 177 110 177 105C177 100 174 96 171 93C168 89 170 83.5 175.5 83.5C183 83.5 190 91 190 102C190 114 184 128 172 131.5C166 133.5 158 134.5 150 134.5Z"/>
+    </clipPath>
+  </defs>
+  <!-- moon + stars -->
+  <circle cx="50" cy="46" r="46" fill="url(#step-sleep-moonglow)"/>
+  <path d="M53.08 24.22A22 22 0 1 1 29.42 53.78A19 19 0 0 0 53.08 24.22Z" fill="#F4F1DE"/>
+  <circle cx="61" cy="57" r="2.4" fill="#E4E0C6"/>
+  <path d="M100 18Q100 24 106 24Q100 24 100 30Q100 24 94 24Q100 24 100 18Z" fill="#F4F1DE"/>
+  <path d="M20 94Q20 98 24 98Q20 98 20 102Q20 98 16 98Q20 98 20 94Z" fill="#F4F1DE" opacity=".55"/>
+  <circle cx="84" cy="52" r="1.5" fill="#F4F1DE" opacity=".5"/>
+  <circle cx="186" cy="30" r="1.5" fill="#F4F1DE" opacity=".5"/>
+  <!-- glow + shadow -->
+  <ellipse cx="116" cy="112" rx="78" ry="46" fill="url(#step-sleep-glow)"/>
+  <ellipse cx="116" cy="141" rx="60" ry="5" fill="#000" opacity=".35"/>
+  <!-- tail peeking from behind the stack -->
+  <path d="M150 121.5C160 121.5 166 120 170 117C174 114 177 110 177 105C177 100 174 96 171 93C168 89 170 83.5 175.5 83.5C183 83.5 190 91 190 102C190 114 184 128 172 131.5C166 133.5 158 134.5 150 134.5Z" fill="#8E9384"/>
+  <path d="M150 128C164 128 178 124 183 110C186 101 182 92 176 88" stroke="#3A3E33" stroke-width="30" stroke-dasharray="0 16 7 7 7 7 7 7 40" clip-path="url(#step-sleep-tailclip)"/>
+  <!-- coin stacks -->
+  <use xlink:href="#step-sleep-coin" x="78" y="128"/>
+  <use xlink:href="#step-sleep-coin" x="78" y="121"/>
+  <use xlink:href="#step-sleep-coin" x="114" y="128"/>
+  <use xlink:href="#step-sleep-coin" x="114" y="121"/>
+  <use xlink:href="#step-sleep-coin" x="114" y="114"/>
+  <use xlink:href="#step-sleep-coin" x="114" y="107"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="128"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="121"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="114"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="107"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="100"/>
+  <use xlink:href="#step-sleep-coin" x="150" y="93"/>
+  <path d="M78 117.5Q78 121 83 121Q78 121 78 124.5Q78 121 73 121Q78 121 78 117.5ZM114 103.5Q114 107 119 107Q114 107 114 110.5Q114 107 109 107Q114 107 114 103.5ZM150 89.5Q150 93 155 93Q150 93 150 96.5Q150 93 145 93Q150 93 150 89.5Z" fill="#95C030"/>
+  <!-- falling coin -->
+  <path d="M149 50H151L150 28Z" fill="url(#step-sleep-trail)"/>
+  <circle cx="150" cy="60" r="14" fill="url(#step-sleep-glow)"/>
+  <circle cx="150" cy="60" r="8" fill="#C8F25A"/>
+  <circle cx="150" cy="60" r="5.6" stroke="#9CC733" stroke-width="1.2"/>
+  <path d="M150 56.5Q150 60 153.5 60Q150 60 150 63.5Q150 60 146.5 60Q150 60 150 56.5Z" fill="#8DB82E"/>
+  <!-- z -->
+  <path d="M176 60h6l-6 7h6M186 46h8l-8 9h8" stroke="#F4F1DE" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity=".75"/>
+</svg>

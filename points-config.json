@@ -1,0 +1,70 @@
+{
+  "_about": "Editable points data for BANDIT. Pendle publishes a points multiplier per YT (for example 20x Sats); BANDIT reads it live. There is no universal points API, so anything Pendle does not publish lives here. Never invent a rate: leave pointsPerDollarDay and basePointsPerDollarDay null when unknown, and BANDIT shows 'rate unknown' and keeps the market out of the cost ranking. status is one of: confirmed points, speculative airdrop, none known. guideUrl (optional) renders as 'Read the guide'.",
+  "unit": "Pendle units: 1 pt is a 1x multiplier on $1 of underlying for 1 day. Set basePointsPerDollarDay for a program to convert to that program's real points.",
+  "programs": {
+    "Sats": { "project": "Ethena", "program": "Ethena Sats", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Ethena": { "project": "Ethena", "program": "Ethena Sats", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Re": { "project": "re.xyz", "program": "Re points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Saturn": { "project": "Saturn", "program": "Saturn points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Strata": { "project": "Strata", "program": "Strata points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "APYX Pips": { "project": "APYX", "program": "APYX Pips", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Noon": { "project": "Noon Capital", "program": "Noon points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Infinifi Points": { "project": "InfiniFi", "program": "InfiniFi points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Peaks": { "project": "Sierra", "program": "Sierra Peaks", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Axis": { "project": "Axis", "program": "Axis points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "xStocks": { "project": "xStocks", "program": "xStocks points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "$JANE": { "project": "3Jane", "program": "$JANE points", "basePointsPerDollarDay": null, "guideUrl": null },
+    "Cores": { "project": "Tori", "program": "Tori Cores", "basePointsPerDollarDay": null, "guideUrl": null },
+    "USD.AI": { "project": "USD.AI", "program": "USD.AI Allo points", "basePointsPerDollarDay": null, "guideUrl": null }
+  },
+  "markets": {
+    "4663-0x206a5cd00e9ffabb8ca564076b64799a78df19b9": {
+      "project": "Robinhood",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "Tokenized NVIDIA stock issued by Robinhood. Pendle shows 0% underlying yield, so YT value here rests on any future Robinhood Chain ecosystem rewards. Speculative."
+    },
+    "4663-0x892defbf510d9baa96dbd2a51b13e879a857a79b": {
+      "project": "Robinhood",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "Tokenized Pfizer stock issued by Robinhood. Pendle shows 0% underlying yield, so YT value here rests on any future Robinhood Chain ecosystem rewards. Speculative."
+    },
+    "4663-0xd6e26e957b3207a5c618213d928647ec84150ca0": {
+      "project": "Robinhood",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "Tokenized SGOV (short Treasury ETF) issued by Robinhood. Pendle shows 0% underlying yield, so YT value here rests on any future Robinhood Chain ecosystem rewards. Speculative."
+    },
+    "4663-0x25f241538bc3de8f7130706827b3f6946db51f5d": {
+      "project": "Pons",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "Pons SHROOM on Robinhood Chain. The underlying earns yield, but no points program is published on Pendle. Any airdrop upside is speculative."
+    },
+    "4663-0x752057e7a63d0a7f15b740d41ef484fdec459ead": {
+      "project": "Orbio",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "Orbio ORBIO on Robinhood Chain. No points program is published on Pendle. Any airdrop upside is speculative."
+    },
+    "4663-0xab0093949fefa432bfb1a0ba8943ee4aebc898a8": {
+      "project": "NetNet",
+      "program": "No published program",
+      "status": "speculative airdrop",
+      "pointsPerDollarDay": null,
+      "guideUrl": null,
+      "note": "NetNet sNET on Robinhood Chain. Its APY readings are extreme, so BANDIT treats the market as distorted."
+    }
+  }
+}

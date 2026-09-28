@@ -2,727 +2,214 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BANDIT · Pendle yield bands, read by SERV</title>
-<meta name="description" content="BANDIT places every live Pendle market inside its own 90-day implied APY band. SERV Reasoning explains where each one sits and what the trade-offs are.">
-<meta property="og:title" content="BANDIT · Pendle yield bands, read by SERV">
-<meta property="og:description" content="Live Pendle implied APY placed inside its own 90-day band, explained by SERV Reasoning.">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BANDIT · The agent that farms points while you sleep</title>
+<meta name="description" content="BANDIT prices every airdrop point on Pendle YTs, places each rate in its 90-day band, and runs an agent on Robinhood Chain that acts on your rules only when SERV Reasoning agrees.">
+<meta property="og:title" content="BANDIT · The agent that farms points while you sleep">
+<meta property="og:description" content="Prices airdrop points on Pendle YTs and farms the cheapest ones on Robinhood Chain, with SERV Reasoning as the risk gate.">
 <meta name="theme-color" content="#0A0B08">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/art/logo-mask.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#0A0B08;
-  --surface:#11130E;
-  --surface-2:#161912;
-  --raise:#1D2118;
-  --line:rgba(234,238,218,.07);
-  --line-strong:rgba(234,238,218,.14);
-  --text:#ECEEE2;
-  --text-2:#A2A695;
-  --text-3:#6A6E5F;
-  --lime:#C8F25A;
-  --lime-dim:rgba(200,242,90,.12);
-  --lo:#5B9DFF;
-  --lo-dim:rgba(91,157,255,.15);
-  --hi:#FF8A4C;
-  --hi-dim:rgba(255,138,76,.15);
-  --err:#FF6B6B;
-  --err-dim:rgba(255,107,107,.09);
-  --r-lg:14px; --r-md:10px; --r-sm:7px;
-  --font-ui:'DM Sans',system-ui,sans-serif;
-  --font-display:'Space Grotesk',sans-serif;
-  --font-data:'JetBrains Mono',ui-monospace,monospace;
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:76px}
-body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
-::selection{background:var(--lime-dim);color:var(--lime)}
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:inherit}
-a{color:inherit;text-decoration:none}
-input,textarea{font-family:inherit;color:inherit}
-
-/* ---------- top bar ---------- */
-.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:26px;height:60px;padding:0 28px;background:rgba(10,11,8,.84);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:10px}
-.brand .glyph{width:26px;height:26px;flex-shrink:0;display:block}
-.brand .mark{font-family:var(--font-display);font-weight:700;font-size:18px;letter-spacing:.16em}
-.brand .tag{font-size:11.5px;color:var(--text-3);letter-spacing:.01em;padding-left:11px;margin-left:2px;border-left:1px solid var(--line-strong)}
-.nav{display:flex;gap:4px;margin-left:6px}
-.nav a{padding:7px 13px;border-radius:99px;font-size:13px;font-weight:500;color:var(--text-2);transition:.18s}
-.nav a:hover{color:var(--text)}
-.nav a.active{background:var(--raise);color:var(--text)}
-.topbar .spacer{flex:1}
-.live{display:flex;align-items:center;gap:8px;font-family:var(--font-data);font-size:11px;color:var(--text-2);letter-spacing:.02em}
-.live .dot{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
-.live.on .dot{background:var(--lime);animation:pulse 2.4s infinite}
-.live.bad .dot{background:var(--err)}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(200,242,90,.45)}70%{box-shadow:0 0 0 7px rgba(200,242,90,0)}100%{box-shadow:0 0 0 0 rgba(200,242,90,0)}}
-.topcta{display:flex;align-items:center;gap:8px;padding:7px 15px;border-radius:99px;background:var(--lime);color:#11140A;font-size:12.5px;font-weight:700;transition:.18s}
-.topcta:hover{filter:brightness(1.08);transform:translateY(-1px)}
-
-/* ---------- layout ---------- */
-.shell{max-width:1280px;margin:0 auto;padding:34px 28px 70px}
-
-/* ---------- hero strip ---------- */
-.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:26px}
-.hero h1{font-family:var(--font-display);font-weight:600;font-size:30px;letter-spacing:-.02em;line-height:1.12}
-.hero h1 .sub{display:block;font-family:var(--font-ui);font-weight:400;font-size:14px;color:var(--text-2);letter-spacing:0;margin-top:9px;max-width:620px;line-height:1.55}
-.hero-stats{display:flex;gap:34px}
-.hstat{text-align:right}
-.hstat .v{font-family:var(--font-data);font-size:20px;font-weight:500;letter-spacing:-.01em}
-.hstat .v.lo{color:var(--lo)} .hstat .v.hi{color:var(--hi)}
-.hstat .k{font-size:11px;color:var(--text-3);margin-top:3px;letter-spacing:.04em;text-transform:uppercase}
-
-/* ---------- signal cards ---------- */
-.signals{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:34px}
-.signal{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 20px 20px;transition:border-color .2s,transform .2s;cursor:pointer;text-align:left;display:block;width:100%}
-.signal:hover{border-color:var(--line-strong);transform:translateY(-1px)}
-.signal .eyebrow{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:13px}
-.signal.lo .eyebrow{color:var(--lo)} .signal.hi .eyebrow{color:var(--hi)} .signal.forming .eyebrow,.signal.move .eyebrow{color:var(--lime)}
-.signal .eyebrow .pip{width:7px;height:7px;border-radius:2px;background:currentColor}
-.signal .pair{font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:-.01em}
-.signal .proto{font-size:12px;color:var(--text-3);margin-top:1px}
-.signal .why{font-size:12.8px;color:var(--text-2);margin-top:10px;line-height:1.55}
-.signal .why b{color:var(--text);font-weight:600}
-.signal .cta{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:12.5px;font-weight:600;color:var(--text);opacity:.85;transition:.18s}
-.signal:hover .cta{opacity:1;gap:9px}
-.signal .cta .arr{color:var(--lime)}
-.signal .glow{position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;filter:blur(46px);opacity:.16;pointer-events:none;background:currentColor}
-.signal.lo .glow{color:var(--lo)} .signal.hi .glow{color:var(--hi)} .signal.forming .glow,.signal.move .glow{color:var(--lime)}
-.signal.skel{cursor:default}
-.signal.skel:hover{transform:none;border-color:var(--line)}
-
-/* ---------- section head ---------- */
-.sechead{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
-.sechead h2{font-family:var(--font-display);font-weight:600;font-size:16.5px;letter-spacing:-.005em}
-.sechead h2 .count{font-family:var(--font-data);font-size:12px;color:var(--text-3);font-weight:400;margin-left:8px}
-.filterbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.filters{display:flex;gap:6px;flex-wrap:wrap}
-.fsep{width:1px;height:18px;background:var(--line-strong)}
-.chip{padding:6px 13px;border-radius:99px;border:1px solid var(--line);font-size:12px;font-weight:500;color:var(--text-2);transition:.16s}
-.chip:hover{color:var(--text);border-color:var(--line-strong)}
-.chip.on{background:var(--lime-dim);border-color:rgba(200,242,90,.38);color:var(--lime)}
-.chip .n{font-family:var(--font-data);font-size:10.5px;opacity:.7;margin-left:5px}
-
-/* ---------- market board ---------- */
-.board{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px}
-.row{display:grid;grid-template-columns:212px 86px minmax(180px,1fr) 104px 92px 96px 112px;gap:16px;align-items:center;padding:15px 22px;border-bottom:1px solid var(--line);transition:background .16s;cursor:pointer}
-.row:last-child{border-bottom:none}
-.row:hover{background:var(--surface-2)}
-.row.head{padding:11px 22px;background:transparent;cursor:default}
-.row.head:hover{background:transparent}
-.row.head>*{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);text-align:left;padding:0}
-.row.head button:hover{color:var(--text-2)}
-.row.head button.sorted{color:var(--lime)}
-.row.head .ar{font-size:9px;margin-left:4px}
-.asset{display:flex;align-items:center;gap:12px;min-width:0}
-.coin{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-data);font-size:11px;font-weight:600;flex-shrink:0}
-.asset .nm{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
-.asset .meta{font-size:11.5px;color:var(--text-3);margin-top:1px;font-family:var(--font-data)}
-.chain-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.02em;background:rgba(234,238,218,.05);color:var(--text-2)}
-.chain-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cc,#8a8f7c)}
-.chain-badge.c1{--cc:#8C9EFF} .chain-badge.c42161{--cc:#2EA7F5} .chain-badge.c8453{--cc:#3C7BFF} .chain-badge.c56{--cc:#F3BA2F}
-
-/* ---------- THE BAND GAUGE (signature) ---------- */
-.band{position:relative;height:34px;display:flex;align-items:center}
-.band .track{position:relative;width:100%;height:5px;border-radius:99px;background:linear-gradient(90deg,var(--lo-dim),rgba(234,238,218,.05) 40%,rgba(234,238,218,.05) 60%,var(--hi-dim))}
-.band .tick{position:absolute;top:-4px;width:1.5px;height:13px;border-radius:2px}
-.band .tick.f{left:0;background:var(--lo)}
-.band .tick.c{right:0;background:var(--hi)}
-.band .tick-label{position:absolute;top:13px;font-family:var(--font-data);font-size:10px;color:var(--text-3);white-space:nowrap}
-.band .tick-label.f{left:0}
-.band .tick-label.c{right:0}
-.band .now{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 3.5px rgba(200,242,90,.18),0 0 14px rgba(200,242,90,.4);transition:left 1.1s cubic-bezier(.22,1,.36,1)}
-.ready .band .now{left:var(--x)}
-.band .now.lo{background:var(--lo);box-shadow:0 0 0 3.5px rgba(91,157,255,.2),0 0 14px rgba(91,157,255,.5)}
-.band .now.hi{background:var(--hi);box-shadow:0 0 0 3.5px rgba(255,138,76,.2),0 0 14px rgba(255,138,76,.5)}
-.band.forming .track{background:repeating-linear-gradient(90deg,rgba(234,238,218,.12) 0 6px,transparent 6px 11px)}
-.band.forming .tick{background:var(--text-3)}
-.band.forming .fnote{position:absolute;left:50%;top:-1px;transform:translateX(-50%);font-family:var(--font-data);font-size:9.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;background:var(--surface);padding:0 6px;line-height:7px}
-.row:hover .band.forming .fnote{background:var(--surface-2)}
-.pctile{font-family:var(--font-data);font-size:12.5px;font-weight:600}
-.pctile .lbl,.num .lbl{display:block;font-size:10px;color:var(--text-3);font-family:var(--font-ui);font-weight:500;letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
-.pctile.lo{color:var(--lo)} .pctile.mid{color:var(--lime)} .pctile.hi{color:var(--hi)} .pctile.forming{color:var(--text-2)}
-.num{font-family:var(--font-data);font-size:13px}
-.apy{font-family:var(--font-data);font-size:14px;font-weight:500}
-.apy .tr{display:block;font-size:11px;margin-top:2px;color:var(--text-3)}
-.apy .tr.up{color:var(--hi)} .apy .tr.dn{color:var(--lo)}
-
-/* skeletons */
-.sk{display:block;height:10px;border-radius:5px;background:linear-gradient(90deg,rgba(234,238,218,.05),rgba(234,238,218,.1),rgba(234,238,218,.05));background-size:200% 100%;animation:shimmer 1.4s infinite linear}
-@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
-.row.skel{cursor:default}
-.row.skel:hover{background:transparent}
-.board-msg{padding:34px 22px;text-align:center;color:var(--text-2);font-size:13px}
-.board-msg b{color:var(--text)}
-.board-msg button{margin-top:12px;padding:7px 14px;border-radius:99px;border:1px solid var(--line-strong);font-size:12px;font-weight:600}
-.board-msg button:hover{border-color:var(--lime);color:var(--lime)}
-
-/* method strip */
-.method{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:34px;padding:0 4px}
-.method div{font-size:12px;color:var(--text-3);line-height:1.5}
-.method b{display:block;color:var(--text-2);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
-
-/* ---------- lower grid ---------- */
-.lower{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;align-items:start}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px}
-.panel h3{font-family:var(--font-display);font-weight:600;font-size:16px;margin-bottom:4px}
-.panel .sub{font-size:12.8px;color:var(--text-2);margin-bottom:18px;line-height:1.55}
-
-/* Ask BANDIT */
-.ask{border-color:rgba(200,242,90,.2);background:linear-gradient(180deg,rgba(200,242,90,.035),rgba(200,242,90,0) 140px),var(--surface)}
-.ask-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
-.serv-badge{display:inline-flex;align-items:center;gap:7px;padding:5px 10px 5px 8px;border-radius:99px;border:1px solid var(--line-strong);background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-2);white-space:nowrap;letter-spacing:.01em}
-.serv-badge .sd{width:14px;height:14px;border-radius:4px;background:var(--lime);display:grid;place-items:center;color:#11140A;font-size:9px;font-weight:800;font-family:var(--font-display)}
-.serv-badge b{color:var(--text);font-weight:700}
-.ask-form{display:grid;grid-template-columns:200px 1fr;gap:14px 16px}
-.fld{display:flex;flex-direction:column;gap:6px}
-.fld.wide{grid-column:1/-1}
-.fl{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
-.fl em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;margin-left:4px}
-.inp{display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line-strong);transition:border-color .16s}
-.inp:focus-within{border-color:rgba(200,242,90,.5)}
-.inp span{font-family:var(--font-data);color:var(--text-3);font-size:14px}
-.inp input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-data);font-size:14px}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);height:40px;padding:3px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line-strong)}
-.seg button{border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text-2);transition:.16s}
-.seg button:hover{color:var(--text)}
-.seg button.on{background:var(--raise);color:var(--text)}
-.seg button.on[data-risk=low]{color:var(--lo)} .seg button.on[data-risk=medium]{color:var(--lime)} .seg button.on[data-risk=high]{color:var(--hi)}
-textarea{resize:vertical;min-height:62px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--line-strong);outline:none;font-size:13.5px;line-height:1.5;transition:border-color .16s}
-textarea:focus{border-color:rgba(200,242,90,.5)}
-textarea::placeholder,.inp input::placeholder{color:var(--text-3)}
-.ask-actions{grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.btn-ask{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:99px;background:var(--lime);color:#11140A;font-size:13.5px;font-weight:700;transition:.18s}
-.btn-ask:hover{filter:brightness(1.07)}
-.btn-ask:disabled{opacity:.5;cursor:wait}
-.btn-ask .arr{transition:transform .18s}
-.btn-ask:hover .arr{transform:translateX(3px)}
-.ask-scope{font-size:12px;color:var(--text-3)}
-.form-err{grid-column:1/-1;font-size:12px;color:var(--err);display:none}
-.form-err.show{display:block}
-
-.answer{margin-top:20px;padding-top:18px;border-top:1px solid var(--line);min-height:90px}
-.answer-empty{font-size:12.8px;color:var(--text-3);line-height:1.6}
-.thinking{display:flex;align-items:center;gap:16px;padding:6px 0}
-.thinking .scan{position:relative;width:120px;height:5px;border-radius:99px;background:linear-gradient(90deg,var(--lo-dim),rgba(234,238,218,.06) 50%,var(--hi-dim));flex-shrink:0}
-.thinking .scan i{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;background:var(--lime);transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(200,242,90,.55);animation:scan 1.8s ease-in-out infinite alternate}
-@keyframes scan{from{left:4%}to{left:96%}}
-.thinking .tx{font-size:13px;color:var(--text-2)}
-.thinking .tx b{color:var(--text);font-weight:600}
-.thinking .tx .t{font-family:var(--font-data);font-size:12px;color:var(--text-3);margin-left:8px}
-.ans-headline{font-family:var(--font-display);font-size:16.5px;font-weight:500;line-height:1.45;letter-spacing:-.005em;margin-bottom:14px}
-.ans-sec{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);margin:18px 0 10px}
-.picks{list-style:none;display:flex;flex-direction:column;gap:10px}
-.pick{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md)}
-.pick .rk{font-family:var(--font-data);font-size:12px;font-weight:600;color:var(--lime);width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim)}
-.pick .top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.pick .pn{font-weight:600;font-size:14px}
-.pick .pm{font-family:var(--font-data);font-size:11px;color:var(--text-3)}
-.pick .lens{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-2);padding:3px 8px;border-radius:6px;background:rgba(234,238,218,.06)}
-.pick .band{height:30px;margin:4px 0 12px}
-.pick .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;font-size:12.8px;line-height:1.55;color:var(--text-2)}
-.pick .kv dt{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);padding-top:2px}
-.pick .kv dd b{color:var(--text);font-weight:600}
-.watch{display:flex;flex-wrap:wrap;gap:6px}
-.watch span{font-size:11.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--line-strong);color:var(--text-2)}
-.risks{display:flex;flex-direction:column;gap:8px}
-.risk{display:grid;grid-template-columns:8px 1fr;gap:11px;font-size:12.8px;color:var(--text-2);line-height:1.55}
-.risk .nd{width:8px;height:8px;border-radius:50%;margin-top:6px;background:var(--hi)}
-.risk b{color:var(--text);font-weight:600}
-.ans-note{margin-top:16px;font-size:12.8px;color:var(--text-2);line-height:1.6}
-.ans-md{font-size:13px;color:var(--text-2);line-height:1.65}
-.ans-md h4{font-family:var(--font-display);font-size:14px;color:var(--text);margin:14px 0 6px}
-.ans-md p{margin:0 0 9px}
-.ans-md ul,.ans-md ol{margin:0 0 10px 20px}
-.ans-md b{color:var(--text)}
-.ans-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px dashed var(--line-strong);font-family:var(--font-data);font-size:11px;color:var(--text-3)}
-.ans-meta .serv-badge{font-family:var(--font-ui)}
-.ans-err{padding:14px 16px;border-radius:var(--r-md);background:var(--err-dim);border:1px solid rgba(255,107,107,.3);font-size:13px;color:var(--text-2);line-height:1.55}
-.ans-err b{color:var(--err);display:block;margin-bottom:3px}
-.ans-err button{margin-top:10px;padding:6px 13px;border-radius:99px;border:1px solid var(--line-strong);font-size:12px;font-weight:600;color:var(--text)}
-.ans-err button:hover{border-color:var(--lime);color:var(--lime)}
-
-/* band notes feed */
-.feed{display:flex;flex-direction:column}
-.evt{display:flex;gap:13px;padding:13px 2px;border-bottom:1px solid var(--line)}
-.evt:last-child{border-bottom:none}
-.evt .rail{display:flex;flex-direction:column;align-items:center;padding-top:5px}
-.evt .nd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.evt .nd.lo{background:var(--lo)} .evt .nd.hi{background:var(--hi)} .evt .nd.lime{background:var(--lime)} .evt .nd.dim{background:var(--text-3)}
-.evt .ln{width:1px;flex:1;background:var(--line);margin-top:6px}
-.evt:last-child .ln{display:none}
-.evt .bd{flex:1;min-width:0}
-.evt .t1{font-size:13px;font-weight:500;line-height:1.45}
-.evt .t1 b{font-weight:600}
-.evt .t1 .m{font-family:var(--font-data);font-size:12px}
-.evt .t1 .m.lo{color:var(--lo)} .evt .t1 .m.hi{color:var(--hi)} .evt .t1 .m.lime{color:var(--lime)}
-.evt .t2{font-size:11px;color:var(--text-3);margin-top:3px;font-family:var(--font-data);text-transform:uppercase}
-.evt .act{align-self:center;padding:6px 12px;border:1px solid var(--line-strong);border-radius:99px;font-size:11.5px;font-weight:600;transition:.16s;white-space:nowrap}
-.evt .act:hover{border-color:var(--lime);color:var(--lime)}
-
-/* footer strip */
-.foot{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:30px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--text-3)}
-.foot .disc{color:var(--text-2);font-weight:500}
-.foot .r{display:flex;gap:18px;flex-wrap:wrap}
-.foot a:hover{color:var(--text-2)}
-
-@media (max-width:1100px){
-  .row{grid-template-columns:190px 80px minmax(150px,1fr) 96px 96px 104px}
-  .row .hide-l{display:none}
-}
-@media (max-width:980px){
-  .signals{grid-template-columns:1fr}
-  .lower{grid-template-columns:1fr}
-  .method{grid-template-columns:1fr 1fr}
-  .row{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 88px;gap:12px;padding:14px 16px}
-  .row.head{padding:11px 16px}
-  .row .hide-m{display:none}
-  .hero{flex-direction:column;align-items:flex-start}
-  .hero-stats{gap:22px}.hstat{text-align:left}
-  .nav,.brand .tag{display:none}
-  .asset .nm{max-width:110px}
-  .ask-form{grid-template-columns:1fr}
-}
-@media (max-width:600px){
-  .topbar{padding:0 16px;gap:14px}
-  .shell{padding:24px 16px 60px}
-  .live{display:none}
-  .hero h1{font-size:24px}
-  .method{grid-template-columns:1fr}
-  .row .coin{display:none}
-  .ask-head{flex-direction:column}
-}
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
-}
-:focus-visible{outline:2px solid var(--lime);outline-offset:2px;border-radius:4px}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
 <header class="topbar">
-  <a class="brand" href="#top" aria-label="BANDIT home">
-    <svg class="glyph" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#C8F25A"/><rect x="7" y="14.75" width="18" height="2.5" rx="1.25" fill="#0A0B08" opacity=".32"/><rect x="6" y="10" width="2.2" height="12" rx="1.1" fill="#0A0B08"/><rect x="23.8" y="10" width="2.2" height="12" rx="1.1" fill="#0A0B08"/><circle cx="12.5" cy="16" r="3.9" fill="#0A0B08"/></svg>
+  <a class="brand" href="#/" aria-label="BANDIT home">
+    <img src="/art/logo-mask.svg" alt="" onerror="this.src='/favicon.svg'">
     <span class="mark">BANDIT</span>
-    <span class="tag">yield bands, read by SERV</span>
   </a>
-  <nav class="nav" aria-label="Primary">
-    <a href="#board" class="active">Board</a>
-    <a href="#ask">Ask BANDIT</a>
-    <a href="#method">Method</a>
+  <nav class="tabs" aria-label="Primary">
+    <a href="#/" data-route="farm">Farm</a>
+    <a href="#/bands" data-route="bands">Bands</a>
+    <a href="#/agent" data-route="agent"><i class="dot" id="tabAgentDot"></i>Agent</a>
+    <a href="#/receipts" data-route="receipts">Receipts</a>
   </nav>
   <div class="spacer"></div>
-  <div class="live" id="live"><span class="dot"></span><span id="liveText">CONNECTING TO PENDLE</span></div>
-  <a class="topcta" href="#ask">Ask BANDIT</a>
+  <div class="pill-live" id="livePill"><i></i><span id="liveText">CONNECTING</span></div>
+  <button class="btn ghost sm" id="walletBtn">Connect wallet</button>
 </header>
 
-<main class="shell" id="top">
+<main class="shell">
 
-  <div class="hero">
-    <h1>Every Pendle market, placed in its band.
-      <span class="sub">Live implied APY against its own 90-day history, so you can see whether today's rate sits near the floor, near the top, or mid band. Then ask SERV Reasoning what that means for your size and risk.</span>
-    </h1>
-    <div class="hero-stats" id="heroStats">
-      <div class="hstat"><div class="v lo" data-k="floor"><span class="sk" style="width:28px;height:18px;margin-left:auto"></span></div><div class="k">Near floor, ≤P20</div></div>
-      <div class="hstat"><div class="v hi" data-k="top"><span class="sk" style="width:28px;height:18px;margin-left:auto"></span></div><div class="k">Near top, ≥P80</div></div>
-      <div class="hstat"><div class="v" data-k="liq"><span class="sk" style="width:64px;height:18px;margin-left:auto"></span></div><div class="k">Liquidity tracked</div></div>
+  <!-- FARM (home) -->
+  <section class="view" id="view-farm" aria-label="Farm">
+    <div class="hero">
+      <div>
+        <span class="eyebrow">Built on SERV Reasoning · Live on Robinhood Chain</span>
+        <h1>The agent that farms points <em>while you sleep.</em></h1>
+        <p class="lede">BANDIT prices every airdrop point on Pendle YTs, shows where each rate sits in its 90-day band, and runs an agent on Robinhood Chain that acts on your rules only when SERV Reasoning agrees.</p>
+        <div class="ctas">
+          <a class="btn primary" href="#/agent">Meet the agent <span class="arr">→</span></a>
+          <a class="btn ghost" href="#farm-board">See what points cost</a>
+        </div>
+        <div class="stats" id="heroStats">
+          <div class="stat"><div class="v lime" data-k="cheapest"><span class="sk" style="width:90px;height:22px"></span></div><div class="k">Cheapest 1K pts now</div></div>
+          <div class="stat"><div class="v" data-k="priced"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">Markets priced</div></div>
+          <div class="stat"><div class="v" data-k="rh"><span class="sk" style="width:30px;height:22px"></span></div><div class="k">On Robinhood Chain</div></div>
+        </div>
+      </div>
+      <div class="art">
+        <img src="/art/hero-night.svg" alt="BANDIT the raccoon asleep in a hammock while points fall like stars">
+        <div class="float f1"><span class="ic">✦</span><div><b id="floatCheapest">pricing points</b><span id="floatCheapestSub">cheapest right now</span></div></div>
+        <div class="float f2"><span class="ic">☾</span><div><b id="floatAgent">agent asleep</b><span id="floatAgentSub">checks on a schedule</span></div></div>
+      </div>
     </div>
-  </div>
 
-  <section class="signals" id="signals" aria-label="Band signals">
-    <div class="signal skel"><div class="eyebrow"><span class="sk" style="width:110px"></span></div><span class="sk" style="width:60%;height:16px"></span><span class="sk" style="width:40%;margin-top:8px"></span><span class="sk" style="width:92%;margin-top:16px"></span><span class="sk" style="width:80%;margin-top:8px"></span></div>
-    <div class="signal skel"><div class="eyebrow"><span class="sk" style="width:110px"></span></div><span class="sk" style="width:60%;height:16px"></span><span class="sk" style="width:40%;margin-top:8px"></span><span class="sk" style="width:92%;margin-top:16px"></span><span class="sk" style="width:80%;margin-top:8px"></span></div>
-    <div class="signal skel"><div class="eyebrow"><span class="sk" style="width:110px"></span></div><span class="sk" style="width:60%;height:16px"></span><span class="sk" style="width:40%;margin-top:8px"></span><span class="sk" style="width:92%;margin-top:16px"></span><span class="sk" style="width:80%;margin-top:8px"></span></div>
+    <div class="section">
+      <div class="sechead"><div><span class="eyebrow">How it works</span><h2>Points are the product. BANDIT puts a price on them.</h2></div></div>
+      <div class="steps">
+        <article class="card step"><span class="no">01</span><img src="/art/step-price.svg" alt=""><h3>Price every point</h3><p>YT holders earn points that can turn into airdrops. BANDIT turns multipliers, leverage and decay into one number: what 1,000 points really cost you.</p></article>
+        <article class="card step"><span class="no">02</span><img src="/art/step-rule.svg" alt=""><h3>Set a rule</h3><p>Pick a market and a trigger, like band below P20, or switch on Farm mode to chase the cheapest points. Caps are hard-coded: $25 a trade, $100 a day.</p></article>
+        <article class="card step"><span class="no">03</span><img src="/art/step-sleep.svg" alt=""><h3>Sleep on it</h3><p>The agent checks on a schedule. SERV Reasoning confirms or holds off, the trade lands on Robinhood Chain, and Telegram tells you why.</p></article>
+      </div>
+    </div>
+
+    <div class="section" id="farm-board">
+      <div class="sechead">
+        <div><span class="eyebrow">Robinhood Chain</span><h2>Where your agent farms</h2><p>Pendle YTs on Robinhood Chain, including tokenized NVDA, PFE and SGOV. No project here publishes a points rate yet, so BANDIT shows them as speculative airdrop plays with their band and decay, never an invented number.</p></div>
+      </div>
+      <div class="farm-grid" id="rhGrid"></div>
+    </div>
+
+    <div class="section">
+      <div class="sechead">
+        <div><span class="eyebrow">Priced points</span><h2>What 1,000 points cost right now</h2><p>Cost per 1,000 points is the expected YT decay to maturity divided by the points you would earn. Lower is cheaper. Free means the underlying yield should cover the YT cost if rates hold. Distorted markets are shown but never ranked.</p></div>
+        <div class="filterbar" id="farmFilters">
+          <button class="chip on" data-farmchain="all">All</button>
+          <button class="chip" data-farmchain="1">Ethereum</button>
+          <button class="chip" data-farmchain="42161">Arbitrum</button>
+        </div>
+      </div>
+      <div class="farm-grid" id="farmGrid"></div>
+      <p class="unit-note" id="unitNote"></p>
+    </div>
   </section>
 
-  <div class="sechead" id="board">
-    <h2>Band board<span class="count" id="boardCount"></span></h2>
-    <div class="filterbar">
-      <div class="filters" role="group" aria-label="Venue" id="venueChips">
-        <button class="chip on" data-venue="all">All</button>
-        <button class="chip" data-venue="pendle">Pendle</button>
-      </div>
-      <span class="fsep" aria-hidden="true"></span>
-      <div class="filters" role="group" aria-label="Chain" id="chainChips">
-        <button class="chip on" data-chain="all">All chains</button>
-      </div>
+  <!-- BANDS -->
+  <section class="view" id="view-bands" aria-label="Band board">
+    <div class="sechead" style="margin-top:14px">
+      <div><span class="eyebrow">Band board</span><h2>Every Pendle market, placed in its band</h2><p>Live implied APY against its own 90-day history, so you can see whether today's rate sits near the floor, near the top, or mid band.</p></div>
+      <div class="filterbar" id="chainChips"></div>
     </div>
-  </div>
-
-  <section class="board" aria-label="Markets" id="boardTable">
-    <div class="row head" id="boardHead">
-      <button data-sort="name">Market</button>
-      <span class="hide-m">Chain</span>
-      <span>90-day band position</span>
-      <button class="hide-m" data-sort="pct">Band pctile</button>
-      <button class="hide-m hide-l" data-sort="under">Underlying</button>
-      <button class="hide-m" data-sort="liq">Liquidity</button>
-      <button data-sort="apy">Implied APY</button>
+    <section class="card board" aria-label="Markets">
+      <div class="row head" id="boardHead">
+        <button data-sort="name">Market</button>
+        <span class="hide-m hide-l">Chain</span>
+        <span>90-day band position</span>
+        <button class="hide-m" data-sort="pct">Band pctile</button>
+        <button class="hide-m hide-l" data-sort="cost">Cost / 1K pts</button>
+        <button class="hide-m" data-sort="liq">Liquidity</button>
+        <button data-sort="apy">Implied APY</button>
+      </div>
+      <div id="boardRows"></div>
+    </section>
+    <div class="method">
+      <div><b>Band</b>Lowest to highest daily implied APY over the last 90 days, including today.</div>
+      <div><b>Percentile</b>Share of those days with a lower implied APY than right now. P12 means 12% of days were lower.</div>
+      <div><b>Band forming</b>Under 14 days of history. BANDIT shows the rate but no percentile until the band has enough days.</div>
+      <div><b>Source</b><span id="srcLine">Pendle hosted API, refreshed every 5 minutes.</span></div>
     </div>
-    <div id="boardRows"></div>
   </section>
 
-  <div class="method" id="method">
-    <div><b>Band</b>Lowest to highest daily implied APY over the last 90 days, including today.</div>
-    <div><b>Percentile</b>Share of those days with a lower implied APY than right now. P12 means 12% of days were lower.</div>
-    <div><b>Band forming</b>Under 14 days of history. BANDIT shows the rate but no percentile until the band has enough days.</div>
-    <div><b>Source</b><span id="srcLine">Pendle hosted API, refreshed every 5 minutes.</span></div>
-  </div>
+  <!-- AGENT -->
+  <section class="view" id="view-agent" aria-label="Agent">
+    <div id="agentRoot"></div>
+  </section>
 
-  <div class="lower">
-    <section class="panel ask" id="ask" aria-label="Ask BANDIT">
-      <div class="ask-head">
-        <div>
-          <h3>Ask BANDIT</h3>
-          <p class="sub">Give BANDIT a position size and a risk level. SERV Reasoning reads the live band data for the top markets on the board and explains where each one sits and what the trade-offs are.</p>
-        </div>
-        <span class="serv-badge"><span class="sd">S</span>Powered by <b>SERV Reasoning</b></span>
-      </div>
-      <form class="ask-form" id="askForm" novalidate>
-        <label class="fld">
-          <span class="fl">Position size (USD)</span>
-          <span class="inp"><span>$</span><input id="size" type="text" inputmode="decimal" value="10,000" autocomplete="off" aria-label="Position size in USD"></span>
-        </label>
-        <div class="fld">
-          <span class="fl" id="riskLbl">Risk level</span>
-          <div class="seg" role="radiogroup" aria-labelledby="riskLbl" id="riskSeg">
-            <button type="button" role="radio" aria-checked="false" data-risk="low">Low</button>
-            <button type="button" role="radio" aria-checked="true" data-risk="medium" class="on">Medium</button>
-            <button type="button" role="radio" aria-checked="false" data-risk="high">High</button>
-          </div>
-        </div>
-        <label class="fld wide">
-          <span class="fl">Question<em>optional</em></span>
-          <textarea id="q" rows="2" maxlength="600" placeholder="e.g. I want a fixed rate on stablecoins for 3 to 6 months. Which bands look stretched?"></textarea>
-        </label>
-        <div class="form-err" id="formErr"></div>
-        <div class="ask-actions">
-          <button class="btn-ask" type="submit" id="askBtn">Ask BANDIT <span class="arr">→</span></button>
-          <span class="ask-scope" id="askScope">Sends the top markets on the board to SERV Reasoning</span>
-        </div>
-      </form>
-      <div class="answer" id="answer" aria-live="polite">
-        <p class="answer-empty">Answers appear here, written by SERV Reasoning from the live band data above. Data and reasoning only, not financial advice.</p>
-      </div>
-    </section>
-
-    <section class="panel" aria-label="Band notes">
-      <h3>Band notes</h3>
-      <p class="sub">Computed from the live board: the extremes, the movers, and the markets running out of time.</p>
-      <div class="feed" id="feed">
-        <div class="evt"><div class="rail"><span class="nd dim"></span><span class="ln"></span></div><div class="bd"><span class="sk" style="width:85%"></span><span class="sk" style="width:45%;margin-top:8px"></span></div></div>
-        <div class="evt"><div class="rail"><span class="nd dim"></span><span class="ln"></span></div><div class="bd"><span class="sk" style="width:75%"></span><span class="sk" style="width:40%;margin-top:8px"></span></div></div>
-        <div class="evt"><div class="rail"><span class="nd dim"></span><span class="ln"></span></div><div class="bd"><span class="sk" style="width:80%"></span><span class="sk" style="width:50%;margin-top:8px"></span></div></div>
-      </div>
-    </section>
-  </div>
+  <!-- RECEIPTS -->
+  <section class="view" id="view-receipts" aria-label="Receipts">
+    <div id="receiptsRoot"></div>
+  </section>
 
   <footer class="foot">
     <span class="disc">Data and reasoning only. Not financial advice.</span>
     <div class="r">
       <a href="https://api-v2.pendle.finance/core/docs" target="_blank" rel="noopener">Pendle API</a>
-      <a href="https://docs.openserv.ai" target="_blank" rel="noopener">OpenServ</a>
+      <a href="https://docs.openserv.ai" target="_blank" rel="noopener">SERV Reasoning</a>
       <a href="https://github.com/toteonsol/bandit" target="_blank" rel="noopener">GitHub</a>
     </div>
   </footer>
-
 </main>
 
-<script>
-(() => {
-'use strict';
-const $ = (s, el = document) => el.querySelector(s);
-const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// Model output is UI copy too: keep it free of em and en dashes.
-const undash = s => String(s ?? '').replace(/\s*\u2014\s*/g, ', ').replace(/\u2013/g, '-');
-const clean = s => esc(undash(s));
-const pct = (x, d = 2) => (x == null || !isFinite(x)) ? 'n/a' : (x * 100).toFixed(d) + '%';
-const ppAbs = x => Math.abs(x * 100).toFixed(2) + 'pp';
-const ppSigned = x => (x > 0 ? '+' : x < 0 ? '-' : '') + ppAbs(x);
-const usd = n => !isFinite(n) ? 'n/a' : n >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'K' : '$' + Math.round(n);
-const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-const shortDate = iso => { const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')} ${MON[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`; };
-const zone = p => p <= 20 ? 'lo' : p >= 80 ? 'hi' : 'mid';
-const zoneLabel = p => p <= 20 ? 'near floor' : p >= 80 ? 'near top' : 'mid band';
-const hueOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
-const initials = name => (name.replace(/^(PT|YT|SY|LP)[-_ ]/i, '').replace(/[^A-Za-z0-9]/g, '').slice(0, 2)) || '??';
-const coinStyle = name => { const h = hueOf(name); return `background:linear-gradient(135deg,hsl(${h} 28% 12%),hsl(${h} 32% 20%));color:hsl(${h} 80% 78%)`; };
-const formed = m => m.band && m.band.status === 'formed';
-const forming = m => m.band && m.band.status === 'forming';
-const bandTag = m => forming(m) ? `band forming · d${m.band.days}` : 'history unavailable';
-const zoneLabelM = m => zoneLabel(m.band.percentile) + (m.band.days < 90 ? ` · ${m.band.days}d` : '');
+<nav class="tabbar" aria-label="Primary">
+  <a href="#/" data-route="farm"><span class="ti">✦</span>Farm</a>
+  <a href="#/bands" data-route="bands"><span class="ti">≋</span>Bands</a>
+  <a href="#/agent" data-route="agent"><span class="ti">☾</span>Agent</a>
+  <a href="#/receipts" data-route="receipts"><span class="ti">▤</span>Receipts</a>
+</nav>
 
-const state = { data: null, byId: new Map(), venue: 'all', chain: 'all', sort: { key: 'pct', dir: 1 }, risk: 'medium' };
+<button class="fab" id="fab" aria-label="Ask BANDIT"><img src="/art/mascot.svg" alt=""><span>Ask BANDIT</span></button>
 
-/* ---------- board ---------- */
-function visible() {
-  const ms = state.data ? state.data.markets : [];
-  return ms.filter(m => (state.venue === 'all' || m.venue === state.venue) && (state.chain === 'all' || String(m.chainId) === state.chain));
-}
-function sorted(ms) {
-  const { key, dir } = state.sort;
-  const val = m => ({ name: m.name.toLowerCase(), liq: m.liquidityUsd, apy: m.impliedApy, under: m.underlyingApy ?? -1, days: m.daysToMaturity, pct: m.band.percentile })[key];
-  return [...ms].sort((a, b) => {
-    if (key === 'pct' && formed(a) !== formed(b)) return formed(a) ? -1 : 1;
-    const va = val(a), vb = val(b);
-    return ((va > vb) - (va < vb)) * dir || b.liquidityUsd - a.liquidityUsd;
-  });
-}
-function bandHtml(m) {
-  const b = m.band;
-  const labels = `<span class="tick-label f">${b.min != null ? pct(b.min) : ''}</span><span class="tick-label c">${b.max != null ? pct(b.max) : ''}</span>`;
-  if (!formed(m)) return `<div class="band forming"><div class="track"><span class="tick f"></span><span class="tick c"></span><span class="fnote">${b.status === 'forming' ? 'forming · d' + b.days : 'no history'}</span>${labels}</div></div>`;
-  const x = Math.max(1.5, Math.min(98.5, b.percentile));
-  return `<div class="band"><div class="track"><span class="tick f"></span><span class="tick c"></span>${labels}<span class="now ${zone(b.percentile)}" style="--x:${x}%" title="P${Math.round(b.percentile)} of 90-day band"></span></div></div>`;
-}
-function trendHtml(m) {
-  const c = m.change7d;
-  if (c == null) return `<span class="tr">no 7d history</span>`;
-  const dir = c > 0.00005 ? 'up' : c < -0.00005 ? 'dn' : '';
-  return `<span class="tr ${dir}">${dir === 'up' ? '▴' : dir === 'dn' ? '▾' : '·'} ${ppAbs(c)} · 7d</span>`;
-}
-function rowHtml(m) {
-  const f = formed(m), p = m.band.percentile;
-  return `<div class="row" role="button" tabindex="0" data-id="${esc(m.id)}" title="Ask BANDIT about ${esc(m.name)}">
-    <div class="asset"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div style="min-width:0"><div class="nm">${esc(m.name)}</div><div class="meta">${shortDate(m.expiry)} · ${m.daysToMaturity}d</div></div></div>
-    <span class="hide-m"><span class="chain-badge c${m.chainId}">${esc(m.chainName)}</span></span>
-    ${bandHtml(m)}
-    <div class="pctile ${f ? zone(p) : 'forming'} hide-m">${f ? 'P' + Math.round(p) : forming(m) ? 'FORMING' : 'N/A'}<span class="lbl">${f ? zoneLabelM(m) : bandTag(m)}</span></div>
-    <div class="num hide-m hide-l">${pct(m.underlyingApy)}<span class="lbl">${m.underlyingApy === 0 && m.hasPoints ? 'points only' : 'underlying'}</span></div>
-    <div class="num hide-m">${usd(m.liquidityUsd)}<span class="lbl">liquidity</span></div>
-    <div class="apy">${pct(m.impliedApy)}${trendHtml(m)}</div>
-  </div>`;
-}
-function renderBoard() {
-  const rows = $('#boardRows');
-  const ms = sorted(visible());
-  $('#boardCount').textContent = state.data ? `${ms.length} live` : '';
-  $$('#boardHead [data-sort]').forEach(b => {
-    const on = b.dataset.sort === state.sort.key;
-    b.classList.toggle('sorted', on);
-    b.querySelector('.ar')?.remove();
-    if (on) b.insertAdjacentHTML('beforeend', `<span class="ar">${state.sort.dir > 0 ? '▲' : '▼'}</span>`);
-  });
-  if (!ms.length) { rows.innerHTML = `<div class="board-msg">No markets match this filter.</div>`; return; }
-  rows.classList.remove('ready');
-  rows.innerHTML = ms.map(rowHtml).join('');
-  requestAnimationFrame(() => requestAnimationFrame(() => rows.classList.add('ready')));
-}
-function skeletonRows(n = 6) {
-  const r = () => `<div class="row skel"><div class="asset"><span class="sk" style="width:34px;height:34px;border-radius:9px"></span><div style="flex:1"><span class="sk" style="width:80%"></span><span class="sk" style="width:55%;margin-top:7px;height:8px"></span></div></div><span class="hide-m sk" style="width:60px"></span><span class="sk" style="height:5px"></span><span class="hide-m sk" style="width:44px"></span><span class="hide-m hide-l sk" style="width:48px"></span><span class="hide-m sk" style="width:52px"></span><span class="sk" style="width:58px"></span></div>`;
-  $('#boardRows').innerHTML = Array.from({ length: n }, r).join('');
-}
+<div class="scrim" id="scrim"></div>
 
-/* ---------- hero, signals, notes ---------- */
-function renderHero() {
-  const ms = state.data.markets.filter(formed);
-  const set = (k, v) => { $(`#heroStats [data-k="${k}"]`).textContent = v; };
-  set('floor', ms.filter(m => m.band.percentile <= 20).length);
-  set('top', ms.filter(m => m.band.percentile >= 80).length);
-  set('liq', usd(state.data.markets.reduce((s, m) => s + (m.liquidityUsd || 0), 0)));
-}
-function signalCard(cls, eyebrow, m, why) {
-  return `<button class="signal ${cls}" data-id="${esc(m.id)}"><div class="glow"></div><div class="eyebrow"><span class="pip"></span>${eyebrow}</div>
-    <div class="pair">${esc(m.name)} · ${shortDate(m.expiry)}</div><div class="proto">Pendle · ${esc(m.chainName)} · ${usd(m.liquidityUsd)} liquidity</div>
-    <p class="why">${why}</p><span class="cta">Ask BANDIT about it <span class="arr">→</span></span></button>`;
-}
-function renderSignals() {
-  const all = state.data.markets, fm = all.filter(formed);
-  const low = [...fm].sort((a, b) => a.band.percentile - b.band.percentile || b.liquidityUsd - a.liquidityUsd)[0];
-  const high = [...fm].sort((a, b) => b.band.percentile - a.band.percentile || b.liquidityUsd - a.liquidityUsd)[0];
-  const young = all.filter(forming).sort((a, b) => b.liquidityUsd - a.liquidityUsd)[0];
-  const mover = all.filter(m => m.change7d != null && m !== low && m !== high).sort((a, b) => Math.abs(b.change7d) - Math.abs(a.change7d))[0];
-  const cards = [];
-  if (low) cards.push(signalCard('lo', 'Nearest the floor', low, `Implied APY <b>${pct(low.impliedApy)}</b> sits at <b>P${Math.round(low.band.percentile)}</b> of its 90-day band, near floor. The fixed rate is close to the bottom of its range, and YT is priced near its 90-day low.`));
-  if (high && high !== low) cards.push(signalCard('hi', 'Nearest the top', high, `Implied APY <b>${pct(high.impliedApy)}</b> sits at <b>P${Math.round(high.band.percentile)}</b> of its 90-day band. The fixed rate sits near the top of its range, and YT is priced near its 90-day high.`));
-  if (young) cards.push(signalCard('forming', `Band forming · day ${young.band.days}`, young, `Only <b>${young.band.days} days</b> of history, under the 14 BANDIT needs for a band. Implied APY is <b>${pct(young.impliedApy)}</b>, shown without a percentile until the band forms.`));
-  else if (mover) cards.push(signalCard('move', 'Biggest 7-day move', mover, `Implied APY moved <b>${ppSigned(mover.change7d)}</b> in 7 days to <b>${pct(mover.impliedApy)}</b>${formed(mover) ? `, now <b>P${Math.round(mover.band.percentile)}</b> of its 90-day band` : ''}.`));
-  $('#signals').innerHTML = cards.join('') || `<div class="signal skel"><p class="why">No markets above the liquidity threshold right now.</p></div>`;
-}
-function renderNotes() {
-  const all = state.data.markets, notes = [];
-  const meta = m => `${esc(m.chainName)} · ${shortDate(m.expiry)} · ${usd(m.liquidityUsd)}`;
-  all.filter(m => formed(m) && m.band.percentile <= 10).sort((a, b) => a.band.percentile - b.band.percentile).slice(0, 2)
-    .forEach(m => notes.push({ m, nd: 'lo', t: `<b>${esc(m.name)}</b> at <span class="m lo">P${Math.round(m.band.percentile)}</span>, bottom decile of its 90-day band` }));
-  all.filter(m => formed(m) && m.band.percentile >= 90).sort((a, b) => b.band.percentile - a.band.percentile).slice(0, 2)
-    .forEach(m => notes.push({ m, nd: 'hi', t: `<b>${esc(m.name)}</b> at <span class="m hi">P${Math.round(m.band.percentile)}</span>, top decile of its 90-day band` }));
-  all.filter(m => m.change7d != null).sort((a, b) => Math.abs(b.change7d) - Math.abs(a.change7d)).slice(0, 1)
-    .forEach(m => notes.push({ m, nd: 'lime', t: `<b>${esc(m.name)}</b> implied APY moved <span class="m lime">${ppSigned(m.change7d)}</span> in 7 days` }));
-  all.filter(m => m.daysToMaturity <= 21).sort((a, b) => a.daysToMaturity - b.daysToMaturity).slice(0, 2)
-    .forEach(m => notes.push({ m, nd: 'hi', t: `<b>${esc(m.name)}</b> matures in <span class="m hi">${m.daysToMaturity} days</span>, time decay dominates the read` }));
-  all.filter(forming).sort((a, b) => b.liquidityUsd - a.liquidityUsd).slice(0, 2)
-    .forEach(m => notes.push({ m, nd: 'dim', t: `<b>${esc(m.name)}</b> band forming, day <span class="m">${m.band.days}</span> of 14` }));
-  const seen = new Set();
-  const list = notes.filter(n => !seen.has(n.m.id + n.nd) && seen.add(n.m.id + n.nd)).slice(0, 6);
-  $('#feed').innerHTML = list.length ? list.map(n => `<div class="evt"><div class="rail"><span class="nd ${n.nd}"></span><span class="ln"></span></div>
-    <div class="bd"><div class="t1">${n.t}</div><div class="t2">${meta(n.m)}</div></div><button class="act" data-id="${esc(n.m.id)}">Ask</button></div>`).join('')
-    : `<p class="answer-empty">Nothing at the extremes right now. Every tracked market sits mid band.</p>`;
-}
-function renderChains() {
-  const counts = {};
-  state.data.markets.forEach(m => { counts[m.chainId] = (counts[m.chainId] || 0) + 1; });
-  $('#chainChips').innerHTML = `<button class="chip${state.chain === 'all' ? ' on' : ''}" data-chain="all">All chains</button>` +
-    state.data.chains.map(c => `<button class="chip${state.chain === String(c.id) ? ' on' : ''}" data-chain="${c.id}">${esc(c.name)}<span class="n">${counts[c.id] || 0}</span></button>`).join('');
-}
-function renderLive() {
-  const d = state.data, t = new Date(d.updatedAt);
-  $('#live').className = 'live on';
-  $('#liveText').textContent = `LIVE · PENDLE · ${d.chains.length} CHAINS · ${d.markets.length} MARKETS`;
-  $('#live').title = `Updated ${t.toUTCString()}`;
-  $('#srcLine').textContent = `Pendle hosted API. Markets above ${usd(d.minLiquidityUsd)} liquidity. Updated ${t.toISOString().slice(11, 16)} UTC, refreshed every 5 minutes.`;
-}
-function renderAll() {
-  state.byId = new Map(state.data.markets.map(m => [m.id, m]));
-  renderLive(); renderHero(); renderSignals(); renderChains(); renderBoard(); renderNotes();
-}
+<!-- Ask BANDIT sheet -->
+<aside class="sheet" id="askSheet" aria-label="Ask BANDIT">
+  <div class="sheet-head">
+    <img src="/art/mascot.svg" alt="">
+    <div><h3>Ask BANDIT</h3><p>SERV Reasoning reads the live band and points data for you.</p></div>
+    <button class="x" data-close aria-label="Close">×</button>
+  </div>
+  <div class="sheet-body">
+    <form class="form" id="askForm" novalidate>
+      <div class="row2">
+        <label class="fld"><span class="fl">Position size</span><span class="money"><input class="inp" id="askSize" inputmode="decimal" value="1,000" autocomplete="off"></span></label>
+        <label class="fld"><span class="fl">Markets</span><select class="inp" id="askChain"><option value="all">All chains</option><option value="4663">Robinhood Chain</option><option value="1">Ethereum</option><option value="42161">Arbitrum</option></select></label>
+      </div>
+      <div class="fld"><span class="fl">Goal</span><div class="seg" id="askGoal"><button type="button" data-v="points" class="on">Farm points</button><button type="button" data-v="balanced">Balanced</button><button type="button" data-v="fixed">Fixed rate</button></div></div>
+      <div class="fld"><span class="fl">Risk level</span><div class="seg" id="askRisk"><button type="button" data-v="low" class="lo">Low</button><button type="button" data-v="medium" class="mid on">Medium</button><button type="button" data-v="high" class="hi">High</button></div></div>
+      <label class="fld"><span class="fl">Question<em>optional</em></span><textarea class="inp" id="askQ" rows="2" maxlength="600" placeholder="e.g. Where are the cheapest points with at least a month left?"></textarea></label>
+      <input type="hidden" id="askFocus">
+      <div class="err-line hidden" id="askErr"></div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button class="btn primary" type="submit" id="askBtn">Ask BANDIT <span class="arr">→</span></button>
+        <span class="serv-badge"><span class="sd">S</span>Powered by <b>SERV Reasoning</b></span>
+      </div>
+    </form>
+    <div class="answer" id="answer" aria-live="polite"></div>
+  </div>
+</aside>
 
-async function load() {
-  try {
-    const r = await fetch('/api/markets');
-    const j = await r.json().catch(() => null);
-    if (!r.ok || !j) throw new Error((j && j.error) || `HTTP ${r.status}`);
-    state.data = j;
-    renderAll();
-  } catch (e) {
-    if (state.data) return; // keep the last good board on a failed refresh
-    $('#live').className = 'live bad';
-    $('#liveText').textContent = 'PENDLE DATA UNAVAILABLE';
-    $('#boardRows').innerHTML = `<div class="board-msg"><b>Could not load live Pendle data.</b><br>${esc(e.message)}<br><button type="button" id="retryLoad">Try again</button></div>`;
-    $('#retryLoad').onclick = () => { skeletonRows(); load(); };
-  }
-}
+<!-- Trade with BANDIT sheet -->
+<aside class="sheet" id="tradeSheet" aria-label="Trade with BANDIT">
+  <div class="sheet-head">
+    <img src="/art/logo-mask.svg" alt="" style="border-radius:10px">
+    <div><h3>Trade with BANDIT</h3><p>Your wallet, your signature. SERV reviews every trade first.</p></div>
+    <button class="x" data-close aria-label="Close">×</button>
+  </div>
+  <div class="sheet-body" id="tradeBody"></div>
+</aside>
 
-/* ---------- interactions ---------- */
-$('#venueChips').addEventListener('click', e => {
-  const b = e.target.closest('[data-venue]'); if (!b) return;
-  state.venue = b.dataset.venue;
-  $$('#venueChips .chip').forEach(x => x.classList.toggle('on', x === b));
-  if (state.data) renderBoard();
-});
-$('#chainChips').addEventListener('click', e => {
-  const b = e.target.closest('[data-chain]'); if (!b) return;
-  state.chain = b.dataset.chain;
-  $$('#chainChips .chip').forEach(x => x.classList.toggle('on', x === b));
-  if (state.data) renderBoard();
-});
-$('#boardHead').addEventListener('click', e => {
-  const b = e.target.closest('[data-sort]'); if (!b || !state.data) return;
-  const k = b.dataset.sort;
-  state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: (k === 'name' || k === 'pct') ? 1 : -1 };
-  renderBoard();
-});
-function askAbout(id) {
-  const m = state.byId.get(id); if (!m) return;
-  $('#q').value = `Where does ${m.name} on ${m.chainName} (matures ${shortDate(m.expiry)}) sit in its band, and what are the trade-offs at my size and risk level?`;
-  $('#ask').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  setTimeout(() => $('#q').focus({ preventScroll: true }), 450);
-}
-document.addEventListener('click', e => {
-  const t = e.target.closest('.row[data-id], .signal[data-id], .act[data-id]');
-  if (t) askAbout(t.dataset.id);
-});
-$('#boardRows').addEventListener('keydown', e => {
-  const t = e.target.closest('.row[data-id]');
-  if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); askAbout(t.dataset.id); }
-});
-$('#riskSeg').addEventListener('click', e => {
-  const b = e.target.closest('[data-risk]'); if (!b) return;
-  state.risk = b.dataset.risk;
-  $$('#riskSeg button').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
-});
-$('#size').addEventListener('blur', e => {
-  const n = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-  if (n > 0) e.target.value = n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-});
-const navLinks = $$('.nav a');
-const spy = new IntersectionObserver(es => es.forEach(en => {
-  if (en.isIntersecting) navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id));
-}), { rootMargin: '-45% 0px -50% 0px' });
-['board', 'ask', 'method'].forEach(id => spy.observe(document.getElementById(id)));
+<!-- Alert modal -->
+<div class="modal" id="alertModal" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
+  <h3 id="alertTitle">Alert me on Telegram</h3>
+  <p class="sub">No wallet needed. When the market crosses your trigger, BANDIT sends you SERV Reasoning's read on Telegram.</p>
+  <div class="form">
+    <label class="fld"><span class="fl">Market</span><select class="inp" id="alertMarket"></select></label>
+    <div class="row2">
+      <div class="fld"><span class="fl">When band percentile is</span><div class="seg" id="alertDir"><button type="button" data-v="below" class="on lo">Below</button><button type="button" data-v="above" class="hi">Above</button></div></div>
+      <label class="fld"><span class="fl">Percentile <em id="alertPctV">P20</em></span><input type="range" id="alertPct" min="1" max="99" value="20"></label>
+    </div>
+    <div class="err-line hidden" id="alertErr"></div>
+    <div id="alertDone"></div>
+  </div>
+  <div class="acts"><button class="btn soft sm" data-close>Close</button><button class="btn primary sm" id="alertCreate">Create alert</button></div>
+</div>
 
-/* ---------- Ask BANDIT ---------- */
-function md(src) {
-  const inline = s => clean(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
-  let html = '', list = null, para = [];
-  const flush = () => { if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; } };
-  const close = () => { if (list) { html += `</${list}>`; list = null; } };
-  for (const raw of String(src).replace(/\r/g, '').split('\n')) {
-    const line = raw.trim(); let m;
-    if (!line) { flush(); close(); continue; }
-    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flush(); close(); html += `<h4>${inline(m[1])}</h4>`; continue; }
-    if ((m = line.match(/^[-*•]\s+(.*)$/))) { flush(); if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
-    if ((m = line.match(/^(\d+)[.)]\s+(.*)$/))) { flush(); if (list !== 'ol') { close(); html += `<ol start="${m[1]}">`; list = 'ol'; } html += `<li>${inline(m[2])}</li>`; continue; }
-    close(); para.push(line);
-  }
-  flush(); close();
-  return html;
-}
-function pickHtml(p, i) {
-  const m = p.market;
-  const band = m ? bandHtml(m) : '';
-  const where = m ? `${esc(m.chainName)} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d · ${usd(m.liquidityUsd)}` : '';
-  const watch = (p.watch || []).filter(Boolean);
-  return `<li class="pick"><span class="rk">${i + 1}</span><div>
-    <div class="top"><div><div class="pn">${clean(m ? m.name : p.name || p.id)}</div><div class="pm">${where}</div></div>${p.lens ? `<span class="lens">${clean(p.lens)}</span>` : ''}</div>
-    ${band}
-    <dl class="kv">
-      ${p.band_read ? `<dt>Band read</dt><dd>${clean(p.band_read)}</dd>` : ''}
-      ${p.why_it_fits ? `<dt>Why it fits</dt><dd>${clean(p.why_it_fits)}</dd>` : ''}
-      ${p.trade_offs ? `<dt>Trade-offs</dt><dd>${clean(p.trade_offs)}</dd>` : ''}
-      ${watch.length ? `<dt>Watch</dt><dd><div class="watch">${watch.map(w => `<span>${clean(w)}</span>`).join('')}</div></dd>` : ''}
-    </dl></div></li>`;
-}
-function renderAnswer(j, ms) {
-  const a = j.answer;
-  let html = '';
-  if (a) {
-    if (a.headline) html += `<div class="ans-headline">${clean(a.headline)}</div>`;
-    if (a.ranked && a.ranked.length) html += `<div class="ans-sec">Ranked read for ${esc(j.risk)} risk</div><ol class="picks">${a.ranked.map(pickHtml).join('')}</ol>`;
-    if (a.main_risks && a.main_risks.length) html += `<div class="ans-sec">Main risks</div><div class="risks">${a.main_risks.map(r => `<div class="risk"><span class="nd"></span><div><b>${clean(r.risk)}.</b> ${clean(r.detail)}</div></div>`).join('')}</div>`;
-    if (a.note) html += `<p class="ans-note">${clean(a.note)}</p>`;
-  } else {
-    html += `<div class="ans-md">${md(j.raw || '')}</div>`;
-  }
-  html += `<div class="ans-meta"><span class="serv-badge"><span class="sd">S</span>Answered by <b>SERV Reasoning</b></span><span>model ${esc(j.model)}</span><span>${(ms / 1000).toFixed(1)}s</span><span>${j.marketsSent} markets sent</span><span>data ${new Date(j.dataAsOf).toISOString().slice(11, 16)} UTC</span><span>Not financial advice</span></div>`;
-  $('#answer').innerHTML = html;
-  requestAnimationFrame(() => requestAnimationFrame(() => $('#answer').classList.add('ready')));
-}
-let asking = false;
-async function ask() {
-  if (asking) return;
-  const err = $('#formErr');
-  const size = parseFloat($('#size').value.replace(/[^0-9.]/g, ''));
-  if (!(size > 0)) { err.textContent = 'Enter a position size in USD, for example 10,000.'; err.classList.add('show'); $('#size').focus(); return; }
-  err.classList.remove('show');
-  asking = true; $('#askBtn').disabled = true;
-  const ans = $('#answer'); ans.classList.remove('ready');
-  const n = Math.min(visible().length || 0, 20);
-  ans.innerHTML = `<div class="thinking"><div class="scan"><i></i></div><div class="tx"><b>SERV Reasoning is reading ${n || 'the'} markets</b><span class="t" id="askT">0s</span></div></div>`;
-  const t0 = performance.now();
-  const tick = setInterval(() => { const el = $('#askT'); if (el) el.textContent = Math.round((performance.now() - t0) / 1000) + 's'; }, 500);
-  try {
-    const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sizeUsd: size, risk: state.risk, question: $('#q').value.trim(), chain: state.chain }) });
-    const j = await r.json().catch(() => null);
-    if (!r.ok || !j) throw new Error((j && j.error) || `The server answered HTTP ${r.status}.`);
-    renderAnswer(j, performance.now() - t0);
-  } catch (e) {
-    ans.innerHTML = `<div class="ans-err"><b>SERV Reasoning did not return an answer.</b>${esc(e.message)}<br>BANDIT does not fall back to another model, so nothing is shown instead.<br><button type="button" id="retryAsk">Try again</button></div>`;
-    $('#retryAsk').onclick = ask;
-  } finally {
-    clearInterval(tick); asking = false; $('#askBtn').disabled = false;
-  }
-}
-$('#askForm').addEventListener('submit', e => { e.preventDefault(); ask(); });
+<!-- Owner modal -->
+<div class="modal" id="ownerModal" role="dialog" aria-modal="true" aria-labelledby="ownerTitle">
+  <h3 id="ownerTitle">Owner mode</h3>
+  <p class="sub">Enter the OWNER_KEY you set in Vercel. It stays in this browser only and unlocks rules and Run now for your agent.</p>
+  <label class="fld"><span class="fl">Owner key</span><input class="inp" id="ownerKey" type="password" autocomplete="off"></label>
+  <div class="err-line hidden" id="ownerErr" style="margin-top:10px"></div>
+  <div class="acts"><button class="btn soft sm" data-close>Cancel</button><button class="btn primary sm" id="ownerSave">Unlock</button></div>
+</div>
 
-skeletonRows();
-load();
-setInterval(load, 5 * 60 * 1000);
-})();
-</script>
+<div class="toasts" id="toasts"></div>
+
+<script src="/app.js" type="module"></script>
 </body>
 </html>
