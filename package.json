@@ -1,0 +1,13 @@
+{
+  "name": "bandit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BANDIT: Pendle yield bands, read by SERV Reasoning",
+  "scripts": {
+    "dev": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "openai": "^7.23.0"
+  }
+}
