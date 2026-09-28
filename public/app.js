@@ -235,7 +235,7 @@ function consoleLine(s) {
   const cls = s.stage === 'decision' ? (bad ? 'bad' : 'decision') : (s.stage === 'exec' && bad) ? 'bad' : s.stage;
   const reason = s.reason ? `<div class="reason">${clean(s.reason)}</div>` : '';
   const link = s.url ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">View tx</a>` : '';
-  return `<div class="ln"><span class="st ${cls}">${STAGE_LABEL[s.stage] || esc(s.stage)}</span><p>${clean(s.text)}${link}${reason}</p></div>`;
+  return `<div class="ln"><span class="st ${cls}">${STAGE_LABEL[s.stage] || esc(s.stage)}</span><div class="lt">${clean(s.text)}${link}${reason}</div></div>`;
 }
 function nodeStatus(s) {
   switch (s.stage) {
@@ -289,12 +289,14 @@ function showRunStatic(run) {
     last = Math.max(last, i);
   });
   for (let w = 0; w < last; w++) $(`#pipe .wire[data-w="${w}"]`)?.classList.add('lit');
+  const decision = [...steps].reverse().find(s => s.stage === 'decision');
+  if (decision) { const [t, tone, sub] = bubbleFor(decision); say(t, tone, `Last run ${ago(run.at)}${sub ? ` · ${sub}` : ''}`); }
 }
 const DELAY = { scan: 1300, rule: 1000, quote: 1100, serv: 1700, decision: 1900, exec: 1500, telegram: 1100, done: 500 };
 async function playRun(run) {
   const token = ++state.live.token;
   state.live.playing = true;
-  $('#mascot')?.classList.replace('sleep', 'awake');
+  wake(true);
   resetPipeline();
   const con = $('#console'); if (!con) return;
   con.innerHTML = '';
@@ -307,6 +309,7 @@ async function playRun(run) {
       setNode(i, s); prev = i;
     }
     if (s.stage === 'scan' && s.markets) { for (let k = 0; k < s.markets.length; k++) { if (token !== state.live.token) return; drawStrip(s.markets, k); await sleep(180); } drawStrip(s.markets, -1); }
+    say(...bubbleFor(s));
     con.insertAdjacentHTML('beforeend', consoleLine(s));
     con.scrollTop = con.scrollHeight;
     await sleep(DELAY[s.stage] || 900);
@@ -314,21 +317,22 @@ async function playRun(run) {
   if (token !== state.live.token) return;
   $$('#pipe .node.active').forEach(n => { n.classList.remove('active'); n.classList.add('done'); });
   state.live.playing = false;
-  setTimeout(() => { if (token === state.live.token) $('#mascot')?.classList.replace('awake', 'sleep'); }, 1800);
+  setTimeout(() => { if (token === state.live.token) wake(false); }, 1800);
 }
 async function runNow() {
   const btns = ['#runNow', '#runNow2'].map(s => $(s)).filter(Boolean);
   btns.forEach(b => { b.disabled = true; });
   const token = ++state.live.token;
   state.live.playing = true;
-  $('#mascot')?.classList.replace('sleep', 'awake');
+  wake(true);
+  say('Waking up. Scanning the Pendle markets…');
   resetPipeline(); setNode(0, { stage: 'scan' });
   $('#pipe [data-ns="0"]').textContent = 'scanning';
-  $('#console').innerHTML = '<div class="ln"><span class="st scan">scan</span><p>Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></p></div>';
+  $('#console').innerHTML = '<div class="ln"><span class="st scan">scan</span><div class="lt">Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>';
   const hint = setTimeout(() => {
     if (token !== state.live.token) return;
-    flowWires(0, 3); setNode(3, { stage: 'serv' });
-    $('#console').insertAdjacentHTML('beforeend', '<div class="ln"><span class="st serv">serv</span><p>SERV Reasoning is weighing the numbers<span class="thinking-dots"><i></i><i></i><i></i></span></p></div>');
+    flowWires(0, 3); setNode(3, { stage: 'serv' }); say('Let me ask SERV Reasoning about this one…');
+    $('#console').insertAdjacentHTML('beforeend', '<div class="ln"><span class="st serv">serv</span><div class="lt">SERV Reasoning is weighing the numbers<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>');
   }, 2800);
   try {
     const run = await api('/api/agent', { method: 'POST', owner: true, body: { action: 'run' } });
@@ -339,10 +343,31 @@ async function runNow() {
     state.agentSig = '';
     await loadAgent();
   } catch (e) {
-    clearTimeout(hint); state.live.playing = false; toast(e.message, 'err'); resetPipeline();
+    clearTimeout(hint); state.live.playing = false; toast(e.message, 'err'); resetPipeline(); wake(false); say(`Something went wrong: ${e.message}`, 'no');
   } finally {
     btns.forEach(b => { b.disabled = false; });
   }
+}
+
+function idleLine(a) {
+  if (!a.lastRun) return "Asleep. Arm a rule and I'll check it every 10 minutes.";
+  const acted = (a.lastRun.actions || []).length;
+  return `Asleep. Last check ${ago(a.lastRun.at)}: ${acted ? `${acted} action${acted === 1 ? '' : 's'}` : 'nothing to do'}. Next one within 10 minutes.`;
+}
+function say(text, tone = '', sub = '') {
+  const b = $('#bubble'); if (!b) return;
+  b.className = `bubble ${tone}`;
+  b.innerHTML = `${clean(text)}${sub ? `<small>${clean(sub)}</small>` : ''}`;
+}
+function wake(on) {
+  ['#buddy', '#mascot'].forEach(sel => { const el = $(sel); if (el) { el.classList.toggle('awake', on); el.classList.toggle('sleep', !on); } });
+}
+function bubbleFor(s) {
+  if (s.stage === 'decision') return [s.ok === false ? `SERV says hold off. ${s.reason || ''}` : `SERV says go. ${s.reason || ''}`, s.ok === false ? 'no' : 'ok', s.model ? `SERV Reasoning · ${s.model}` : ''];
+  if (s.stage === 'serv') return ['Let me ask SERV Reasoning about this one…', '', ''];
+  if (s.stage === 'exec') return [s.text, s.ok === false ? 'no' : 'ok', ''];
+  if (s.stage === 'done') return [`${s.text} zZz`, '', ''];
+  return [s.text, '', ''];
 }
 
 function renderAgent() {
@@ -387,6 +412,7 @@ function renderAgent() {
         <h3>Agent Live <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
         <p class="sub">Each run, step by step: scan the markets, check your rules, get a live Pendle quote, ask SERV Reasoning to confirm or hold off, act on Robinhood Chain, tell Telegram.</p>
         ${pipelineHtml()}
+        <div class="live-buddy"><div class="buddy sleep" id="buddy"><img src="/art/mascot.svg" alt="BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div><div class="bubble" id="bubble">${esc(idleLine(a))}</div></div>
         <div class="mkt-strip" id="mktStrip"></div>
         <div class="console" id="console"><div class="empty">No runs yet. ${owner ? 'Press Run now to wake the agent.' : 'The agent wakes on its schedule.'}</div></div>
         <div class="live-actions">
