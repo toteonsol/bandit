@@ -202,7 +202,7 @@ function renderFarm() {
   set('top', formedMs.filter(m => m.band.percentile >= 80).length);
   set('rh', rh.length);
   const best = ms.filter(m => m.range && !m.distorted && m.range.toHigh > 0.005).sort((a, b) => (b.range.ratio ?? 0) - (a.range.ratio ?? 0))[0];
-  if (best) { $('#floatCheapest').textContent = `YT-${best.name} · ${upPct(best.range.toHigh)} to high`; $('#floatCheapestSub').textContent = `P${Math.round(best.band.percentile)}, most room to run`; }
+  if (best) { $('#floatCheapest').textContent = `YT-${best.name} · ${upPct(best.range.toHigh)} to high`; $('#floatCheapestSub').textContent = `Grade ${entryGrade(best).g} · most room to run`; }
 }
 
 /* ---------- markets board: every YT, graded for entry ---------- */

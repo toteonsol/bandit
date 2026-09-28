@@ -1,33 +1,38 @@
-SINGLE POST (under 280 characters on X, links count as 23 each)
-Attach: screenshot-1-home.png and screenshot-3-agent-live.png
+SINGLE POST (263 of 280 characters on X, where each link counts as 23)
+Attach either one video (a clip from "Clip it" in the Agent World) or up to 4 images:
+screenshot-3-agent-world.png, screenshot-2-markets.png, screenshot-4-ask-answer.png, screenshot-1-home.png
 
-BANDIT: the YT trading agent that works while you sleep. It shows where every Pendle YT sits in its range, room to run or at the top, and trades your rules on Robinhood Chain when SERV Reasoning agrees.
+BANDIT: the YT trading agent that works while you sleep.
+
+It grades every Pendle YT for entry, tells you in plain words which ones sit near their floor, and trades your rules on Robinhood Chain only when @openservai SERV Reasoning agrees.
+
+https://bandit-bands.vercel.app
+
+
+THREAD VERSION (4 posts, each under 280)
+
+1/4 (270)
+Meet BANDIT, the YT trading agent that works while you sleep. Built on @openservai SERV Reasoning, live on Robinhood Chain.
+
+A YT's price follows the yield the market expects. BANDIT grades every Pendle YT for entry: A is cheap with room to run, D is already at its top.
+[attach screenshot-2-markets.png]
+
+2/4 (200)
+Ask it in plain words: "Which YTs are near their floor right now?"
+
+SERV Reasoning reads the live board and answers for beginners, with one-tap actions on every pick and a share card for every answer.
+[attach share-card-example.png or screenshot-4-ask-answer.png]
+
+3/4 (206)
+Your own agent is free: $1,000 of practice money, rules like "buy $100 when it gets cheap", a check every 10 minutes, and SERV has to agree before anything moves.
+
+Watch it work live, stream it, or clip it.
+[attach your Agent World clip, or screenshot-3-agent-world.png]
+
+4/4 (202)
+Real trades on Robinhood Chain: top up in one signature from Base or Arbitrum, approve with one tap, hard caps in code. Not financial advice.
 
 Live: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
-
-@openservai
-
-
-THREAD VERSION (3 posts)
-
-1/3
-Meet BANDIT, a YT trading agent on Robinhood Chain, built on @openservai SERV Reasoning.
-
-A YT's price moves with its implied APY. BANDIT places every Pendle YT in its own 90-day range and shows the room to run: what it gains back at its high, what it loses at its low.
 [attach screenshot-1-home.png]
-
-2/3
-Set a rule, like "enter near the floor, exit near the top", or turn on Farm mode for points.
-
-Every 10 minutes the agent checks. On a trigger, SERV Reasoning must confirm with a written reason before it trades on Robinhood Chain. Caps are hard-coded: $25 a trade, $100 a day.
-[attach screenshot-3-agent-live.png]
-
-3/3
-Agent Live shows every run, trades link to the explorer, and Telegram says why. Farming points? BANDIT prices those too.
-
-No wallet needed to browse. Bring Rabby to trade yourself. Not financial advice.
-
-Live: https://bandit-bands.vercel.app
-Code: https://github.com/toteonsol/bandit
-[attach screenshot-2-ranges.png]
+(If the repo is private, remove the Code line.)

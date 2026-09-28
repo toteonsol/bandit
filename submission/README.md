@@ -6,27 +6,28 @@ Live app: https://bandit-bands.vercel.app
 Code: https://github.com/toteonsol/bandit
 Track: Mainnet & MCP (Robinhood Chain), OpenServ SERV Hackathon Edition 01
 
-A YT's price moves with its implied APY, yet nobody shows traders whether a YT is cheap or expensive against its own history. BANDIT places every Pendle YT in its own 90-day range and shows its **room to run**: what it would gain if its rate returned to its 90-day high, and what it would lose back at its low, before decay runs out the clock. Then it runs an autonomous agent on **Robinhood Chain** that trades your rules only when **SERV Reasoning** agrees. Farming points? BANDIT also prices a point: **cost per 1,000 points**.
+A YT's price rises and falls with the yield the market expects, yet nobody tells traders whether a YT is cheap or already at its top. BANDIT grades every Pendle YT for entry against its own last 90 days, answers "which YTs are cheap right now?" in plain words, and runs agents on **Robinhood Chain** that trade your rules only when **SERV Reasoning** agrees. You can watch them work live.
 
 Data and reasoning only. Not financial advice.
 
 ## What you can do
 
 **No wallet needed**
-- **Home.** Where the YTs sit right now: most room to run, already at the top, biggest 7-day move. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV, each with its range and room to run.
-- **Points.** For airdrop hunters: every YT with a points program, points per day per $100, cost per 1,000 points, decay by maturity and YT leverage.
-- **Band board.** Implied APY placed in its 90-day band: P12 means only 12% of days were lower.
-- **Ask BANDIT.** Enter a size, a goal (trade the range, farm points, fixed rate) and a risk level. SERV Reasoning returns a ranked read with the points math and the main risks.
-- **Telegram alerts.** Pick a market and a band trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
+- **Markets, graded for entry.** Every YT gets a grade from A to D (or New, or Risky) from its price against its own 90 days (45%), room to run against the downside (25%), time left (15%) and pool size (15%), plus a small bonus for a points program. Best entries come first; tap a row for the plain reasons and one-tap actions.
+- **Ask BANDIT.** Ask in plain words. SERV Reasoning ranks the live board for beginners, every pick has actions (watch it with your agent, Telegram alert, trade), and every answer gets a share link and an image card.
+- **Home.** Most room to run, already at the top, biggest move this week, and the Robinhood Chain markets (tokenized NVDA, PFE, SGOV and more). Farming points? Cost per 1,000 points for every YT with a points program.
+- **Telegram alerts.** Pick a market and a trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
+- **Agent World.** A live animated scene of an agent at work, driven by real runs: the market board, the rules, SERV Reasoning, Robinhood Chain and Telegram. Stream it fullscreen (or open `/#/stream` as an OBS browser source) and record MP4 clips in 16:9 or 9:16.
 
 **With your own wallet (Rabby, MetaMask, any browser wallet)**
-- **Trade with BANDIT.** BANDIT builds the Pendle trade on Robinhood Chain from plain ETH, SERV Reasoning confirms or holds off with a reason, and you sign it yourself. BANDIT never holds your funds.
+- **My agent.** Free: sign a message, start with $1,000 of practice money, and arm rules like "buy $100 of this YT when it gets cheap". It checks every 10 minutes on its own and SERV has to agree before anything moves. On Robinhood Chain it can prepare real trades you approve with one tap.
+- **Activity.** Every check (including the ones where nothing needed doing), every trade and every SERV decision.
+- **Trade with BANDIT.** BANDIT builds the Pendle trade on Robinhood Chain from plain ETH, SERV Reasoning confirms or holds off with a reason, and you sign it yourself.
+- **Top up Robinhood Chain.** One signature bridges ETH from Base, Arbitrum, Optimism or Ethereum through Relay, with fees and arrival time shown up front. Trades need only ETH, no USDC. BANDIT never holds your funds.
 
-**Autonomous agent (owner)**
-- Set a **band rule** (enter or exit a YT when its band percentile crosses a level) or **Farm mode** (buy the cheapest points under your max cost, skip the top 20% of each band, rotate near maturity or when another market is 30% cheaper per point).
-- Every 10 minutes the watcher checks each rule. On a trigger it gets a live Pendle quote, and **SERV Reasoning must confirm with a written reason** before anything happens.
-- Trades run on Robinhood Chain from the agent wallet, and every one is simulated first. Telegram gets the points math and the reason. Receipts link each trade to the explorer, and a points ledger tracks estimated points and decay.
-- **Agent Live** visualizes each run step by step: scan, rules, quote, SERV Reasoning, Robinhood Chain, Telegram.
+**The house agent (owner)**
+- Band rules or Farm mode, checked every 10 minutes. On a trigger it gets a live Pendle quote, and **SERV Reasoning must confirm with a written reason** before anything happens.
+- Trades run from the agent wallet on Robinhood Chain with hard caps in code ($25 a trade, $100 a day, 5% maximum price impact, allowlist, kill switch), and every transaction is simulated first. Receipts link each trade to the explorer.
 
 ## How BANDIT reads a range
 

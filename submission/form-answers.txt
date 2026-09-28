@@ -11,33 +11,45 @@ Track:
 Mainnet & MCP (Robinhood Chain)
 
 One-line pitch:
-BANDIT is the YT trading agent that works while you sleep: it shows where every Pendle YT sits in its own 90-day range, how much room it has to run, and trades your rules on Robinhood Chain only when SERV Reasoning agrees.
+BANDIT is the YT trading agent that works while you sleep: it grades every Pendle YT for entry against its own history, tells you in plain words which ones sit near their floor, and runs an agent on Robinhood Chain that trades your rules only when SERV Reasoning agrees, live on screen.
 
 Description:
-A YT's price moves with its implied APY, yet nobody shows traders whether a YT is cheap or expensive against its own history. BANDIT does. It places every liquid Pendle YT in its 90-day range (P13 means only 13% of days were lower) and turns the range into room to run: what the YT would gain if its rate returned to its 90-day high, and what it would lose back at its low, with days left before decay. Right now, for example, YT-strUSD sits at P13 with +12% to its high and -2% to its low, while tokenized NVDA on Robinhood Chain sits at its 90-day high with nothing left above. For points and airdrop hunters, BANDIT also prices a point: cost per 1,000 points from YT leverage, the points multiplier and decay. Distorted markets (thin, near expiry, extreme APY) are flagged and never ranked.
+A YT's price rises and falls with the yield the market expects, yet nobody tells traders whether a YT is cheap or already at its top. BANDIT does, for every liquid Pendle YT.
 
-On top sits an autonomous agent on Robinhood Chain. You set a rule, like entering a YT near the floor of its band and exiting near the top, or switch on Farm mode for points. A watcher checks every 10 minutes. On a trigger it gets a live Pendle quote, and SERV Reasoning must confirm with a written reason before the agent trades from its own wallet. The code enforces hard caps: $25 per trade, $100 per day, 5% maximum price impact, an allowlist, a kill switch, and a simulation before every transaction. Telegram gets the reason, receipts link every trade to the Robinhood Chain explorer, and the Agent Live view animates each run step by step with BANDIT the raccoon narrating.
+Markets grades each YT from A to D for entry: its price against its own last 90 days, the gain back to its high against the loss down to its low, the time left before the YT fades, and pool size, with a small bonus for published points programs. Tap a row and it explains the grade in plain words. Right now, for example, YT-strUSD is cheaper than 87% of its last 64 days with +12% back to its high, while tokenized NVDA on Robinhood Chain sits at its high with nothing left above.
 
-No wallet is needed to browse, Ask BANDIT, or get Telegram alerts. Reviewers can trade with their own Rabby or MetaMask: BANDIT builds the trade, SERV reviews it, and they sign. Data and reasoning only, not financial advice.
+Ask BANDIT answers questions like "Which YTs are near their floor right now?" or "Is YT-NVDA a good entry?" SERV Reasoning ranks the live board and writes the answer for beginners. Every pick has one-tap actions (watch it with your agent, a Telegram alert, a trade on Robinhood Chain), and every answer gets a share link and an image card for X.
+
+Everyone gets a free agent: sign a message with any wallet, start with $1,000 of practice money, and arm rules like "buy $100 of this YT when it gets cheap". It checks every 10 minutes on its own. When a rule is met, SERV Reasoning confirms or holds off with a written reason before anything happens, and on Robinhood Chain the agent can prepare real trades you approve with one tap in your own wallet. The Agent World shows the agent at work as a live animated scene you can stream fullscreen or record as an MP4 clip for social, and Activity lists every check, trade and SERV decision.
+
+BANDIT's house agent trades a real wallet on Robinhood Chain with hard caps written into the code: $25 a trade, $100 a day, 5% maximum price impact, an allowlist, a kill switch and a simulation before every transaction. Receipts link each trade to the explorer, and Telegram says why.
+
+Getting funds onto Robinhood Chain takes one signature: the built-in top-up bridges ETH from Base, Arbitrum, Optimism or Ethereum through Relay, shows the fees and arrival time up front, and never holds the funds. Trades need only ETH, no USDC.
+
+No wallet is needed to browse, ask, or get Telegram alerts. Data and reasoning only, not financial advice.
 
 How it uses SERV:
 SERV Reasoning is the decision layer, called through the OpenAI SDK at inference-api.openserv.ai/v1 (model gpt-5.4-mini) with strict json_schema output.
-1) Risk gate: before the agent acts on a rule, or before a user signs, SERV weighs band position, room to run, decay, liquidity, points data and the live Pendle price impact. It returns confirm or reject with a plain-language reason. Only a confirmed trigger proceeds, and the code still enforces the hard caps on top.
-2) Ask BANDIT: a ranked read for the user's size, goal (trade the range, farm points, fixed rate) and risk level.
-3) Alerts: a short SERV read attached to every Telegram alert.
+1) Risk gate: before the house agent or any personal agent acts, and before a user signs a trade, SERV weighs where the YT sits against its history, room to run, time left, liquidity, points and the live Pendle price impact. It returns confirm or hold off with a plain-language reason. Only a confirmed trigger proceeds, and the code still enforces the hard caps on top.
+2) Ask BANDIT: a ranked, beginner-friendly read of the live board for the user's question, size and risk level, saved for 30 days so it can be shared by link.
+3) Alerts: a short SERV read attached to Telegram alerts and agent messages.
 There is no fallback model. If SERV fails, the agent does nothing and the UI says so.
 
 Why it has revenue potential:
-YT is Pendle's most speculative instrument and the least understood. BANDIT turns it into a readable range with an agent that trades it. Revenue comes from a Pro tier (more rules, faster checks, more markets and chains, custom bands) and an optional small fee per agent trade. Payments can settle in USDG on Robinhood Chain through SUMMON, our x402 facilitator that is already live there, so users pay by signing in their own wallet with no custody. Next come agent accounts for every user: a smart account per user with a capped session key, so anyone can run their own YT agent without handing over keys or funds.
+YT is Pendle's most speculative instrument and the least understood. BANDIT turns it into a grade anyone can read and an agent that trades it, and every answer and clip is shareable, so growth is built in. Revenue comes from a Pro tier (more rules, faster checks, more chains, real-money agents with larger caps), a small fee per agent trade, and a small fee on in-app top-ups. Payments can settle in USDG on Robinhood Chain through SUMMON, our x402 facilitator that is already live there, so users pay by signing in their own wallet with no custody. Next come smart accounts with capped session keys, so every user's agent can trade real money on its own without handing over keys.
 
 Project link (live demo):
 https://bandit-bands.vercel.app
 
 GitHub:
 https://github.com/toteonsol/bandit
+(Only include this if the repo stays public. The rules do not require a public repo.)
 
 Logo:
 submission/bandit-logo.png
+
+Images:
+submission/screenshot-1-home.png, screenshot-2-markets.png, screenshot-3-agent-world.png, screenshot-4-ask-answer.png, share-card-example.png
 
 Did you enable data collection?
 Yes (enable it at console.openserv.ai/settings/organization before submitting; it is required for eligibility)
