@@ -60,6 +60,8 @@ function route() {
   $$('.view').forEach(v => v.classList.toggle('on', v.id === `view-${r}`));
   $$('[data-route]').forEach(a => a.classList.toggle('on', a.dataset.route === r));
   if (h === 'farm-board') setTimeout(() => $('#farm-board').scrollIntoView({ behavior: 'smooth' }), 40);
+  const tm = location.hash.match(/^#\/trade\?m=([^&]+)/);
+  if (tm) { const id = decodeURIComponent(tm[1]); history.replaceState(null, '', '#/'); const open = () => openTrade(id); state.data ? open() : setTimeout(open, 1500); }
   else if (changed) window.scrollTo({ top: 0 });
   // Only one Agent Live pipeline lives in the DOM at a time (they share element ids).
   if (r !== 'agent') $('#agentRoot').innerHTML = '';
@@ -94,6 +96,17 @@ const tradable = m => m.chainId === RH && !m.distorted && (!state.agent || state
 const upPct = x => (x == null || !isFinite(x)) ? 'n/a' : `${x >= 0 ? '+' : ''}${(x * 100).toFixed(x !== 0 && Math.abs(x) < 0.1 ? 1 : 0)}%`;
 const rangeLine = m => m.range ? `${upPct(m.range.toHigh)} to its 90-day high · ${upPct(m.range.toLow)} to its low` : (m.band.status === 'forming' ? `Band forming, day ${m.band.days} of 14` : 'No band history yet');
 
+// Pre-written X post with this YT's live numbers. Descriptive only, like the rest of BANDIT.
+function shareUrl(m) {
+  const site = 'https://bandit-bands.vercel.app';
+  let text;
+  if (m.range && m.range.toHigh > 0.005) text = `YT-${m.name} sits at P${Math.round(m.band.percentile)} of its 90-day range: ${upPct(m.range.toHigh)} if its rate returns to its high, ${upPct(m.range.toLow)} to its low, ${m.daysToMaturity} days left.`;
+  else if (m.range) text = `YT-${m.name} sits at its 90-day high (P${Math.round(m.band.percentile)}): ${upPct(m.range.toLow)} back to its low.`;
+  else text = `YT-${m.name} on ${m.chainName} is too new for a range: its band is still forming.`;
+  text += `\n\nRead by BANDIT, the YT trading agent on Robinhood Chain, built on @openservai SERV Reasoning.`;
+  return `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(site)}`;
+}
+
 // mode 'trade' leads with room to run; mode 'points' leads with cost per 1,000 points.
 function marketCard(m, rank, mode = 'trade') {
   const p = m.points || {};
@@ -120,7 +133,7 @@ function marketCard(m, rank, mode = 'trade') {
     <div class="kpis">${kpis.map(([v, k]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
     <div>${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div></div>
     ${p.note && mode === 'trade' && m.chainId === RH ? `<p class="note">${clean(p.note)}</p>` : ''}
-    <div class="acts"><button class="btn soft xs" data-ask="${esc(m.id)}">Ask BANDIT</button><button class="btn soft xs" data-alert="${esc(m.id)}">Alert me</button>${tradable(m) ? `<button class="btn primary xs" data-trade="${esc(m.id)}">Trade</button>` : ''}${p.guideUrl ? `<a class="guide" href="${esc(p.guideUrl)}" target="_blank" rel="noopener">Read the guide →</a>` : ''}</div>
+    <div class="acts"><button class="btn soft xs" data-ask="${esc(m.id)}">Ask BANDIT</button><button class="btn soft xs" data-alert="${esc(m.id)}">Alert me</button>${tradable(m) ? `<button class="btn primary xs" data-trade="${esc(m.id)}">Trade</button>` : ''}${p.guideUrl ? `<a class="guide" href="${esc(p.guideUrl)}" target="_blank" rel="noopener">Read the guide →</a>` : ''}<a class="btn soft xs" href="${shareUrl(m)}" target="_blank" rel="noopener">Share</a></div>
   </article>`;
 }
 
@@ -131,7 +144,7 @@ function signalCard(cls, eyebrow, m, headline, body) {
     <div class="sig-big">${headline}</div>
     ${bandHtml(m)}
     <p class="why">${body}</p>
-    <span class="cta">Ask BANDIT about it <span class="arr">→</span></span></article>`;
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto"><span class="cta">Ask BANDIT about it <span class="arr">→</span></span><a class="btn soft xs" href="${shareUrl(m)}" target="_blank" rel="noopener">Share on X</a></div></article>`;
 }
 
 function renderSignals() {
@@ -1059,6 +1072,7 @@ function handleMyClick(e) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
+  if (e.target.closest('a[href^="http"]')) return; // external links (Share, explorer, Telegram) just open
   if (handleMyClick(e)) return;
   const q = sel => e.target.closest(sel);
   let el;
