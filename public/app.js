@@ -451,7 +451,7 @@ function updateWorldHud() {
 }
 async function mountWorld(kind) {
   const cv = $('#world'); if (!cv) return;
-  if (world) { world.destroy(); world = null; }
+  if (world) { world.destroy(); world = null; state.live.playing = false; }
   const { createWorld } = await import('/world.js');
   if ($('#world') !== cv) return; // the page re-rendered while the module loaded
   world = createWorld(cv, { markets: worldList });
@@ -463,7 +463,7 @@ async function mountWorld(kind) {
   if (run.at !== worldSeen[kind]) { worldSeen[kind] = run.at; playRun(run); }
   else showRunStatic(run);
 }
-function unmountWorld() { if (world) { world.destroy(); world = null; } }
+function unmountWorld() { if (world) { world.destroy(); world = null; } state.live.playing = false; }
 function showRunStatic(run) {
   const con = $('#console');
   if (con) con.innerHTML = (run.steps || []).map(consoleLine).join('') || '<div class="empty">No steps recorded.</div>';
@@ -1414,7 +1414,9 @@ function renderReview() {
   const q = r.quote, v = r.verdict, ok = r.decision === 'confirm';
   out.innerHTML = `<div class="verdict ${ok ? 'ok' : 'no'}"><div class="vh">${ok ? '✓ SERV Reasoning confirmed' : '⏸ SERV Reasoning held off'}</div><p class="hl">${clean(v.headline)}</p><p>${clean(r.blockedBy || v.reason)}</p>${v.points_math ? `<p style="margin-top:6px">${clean(v.points_math)}</p>` : ''}</div>
     <div class="qgrid"><div class="kpi"><b>${q.ethIn.toFixed(5)}</b><span>ETH in</span></div><div class="kpi"><b>${compact(q.ytOut)}</b><span>${esc(r.market.name)} out</span></div><div class="kpi"><b>${q.priceImpact == null ? 'n/a' : (q.priceImpact * 100).toFixed(2) + '%'}</b><span>price impact</span></div></div>
-    ${ok ? `<button class="btn primary" id="tSign">Sign in ${esc((state.wallet.info && state.wallet.info.name) || 'wallet')} <span class="arr">→</span></button><p class="help" style="margin-top:8px">Your wallet switches to Robinhood Chain and shows the exact transaction before you sign. Data and reasoning only, not financial advice.</p>` : '<p class="help">BANDIT only passes trades that SERV Reasoning confirms and the 5% price-impact cap allows. Try a smaller size or another market.</p>'}
+    ${ok ? `<button class="btn primary" id="tSign">Sign in ${esc((state.wallet.info && state.wallet.info.name) || 'wallet')} <span class="arr">→</span></button><p class="help" style="margin-top:8px">Your wallet switches to Robinhood Chain and shows the exact transaction before you sign. Data and reasoning only, not financial advice.</p>`
+      : q.tx ? `<p class="help" style="margin-bottom:10px;font-size:12.5px;color:var(--text-2)">SERV Reasoning would not take this trade, for the reason above. It is your wallet and your call: you can still sign it yourself. The 5% price-impact cap still applies.</p><button class="btn soft" id="tSign">I understand, sign it anyway</button>`
+      : `<p class="help">${esc(r.blockedBy || 'A hard limit blocks this trade.')} Try a smaller size or another market.</p>`}
     <div id="tSent"></div>`;
 }
 async function signTrade() {
@@ -1446,6 +1448,9 @@ const ORIGINS = [
   { id: 1, name: 'Ethereum', rpc: 'https://ethereum-rpc.publicnode.com', explorer: 'https://etherscan.io', add: null },
 ];
 const TOPUP_USD = [2, 5, 10, 25];
+const RH_DIRECT = { id: RH, name: 'Robinhood Chain', direct: true, rpc: WALLET_CHAIN.rpcUrls[0], explorer: WALLET_CHAIN.blockExplorerUrls[0] };
+const originsFor = target => target === 'agent' ? [RH_DIRECT, ...ORIGINS] : ORIGINS;
+const originById = id => [RH_DIRECT, ...ORIGINS].find(o => o.id === id);
 const TOPUP_MIN = 1, TOPUP_MAX = 500;
 state.bridge = { origin: 8453, picked: false, usd: 5, custom: false, quote: null, balances: {}, balFor: null, target: 'self', host: '#bridgeBody', token: 0, busy: false, destBal: null };
 
@@ -1483,7 +1488,7 @@ function renderBridge() {
   const to = bridgeRecipient();
   host.innerHTML = `<div class="bridge">${head}
     <div class="br-note">${esc(topupWhy(b.target))}</div>
-    <div class="fld"><span class="fl">From</span><div class="pills br-origins">${ORIGINS.map(o => `<button type="button" data-borigin="${o.id}" class="${b.origin === o.id ? 'on' : ''}">${o.name}<small data-bbal="${o.id}">${b.balFor === w.address && b.balances[o.id] != null ? `${b.balances[o.id].toFixed(4)} ETH` : '…'}</small></button>`).join('')}</div></div>
+    <div class="fld"><span class="fl">Bring ETH from</span><div class="pills br-origins">${originsFor(b.target).map(o => `<button type="button" data-borigin="${o.id}" class="${b.origin === o.id ? 'on' : ''}">${o.name}<small data-bbal="${o.id}">${b.balFor === w.address && b.balances[o.id] != null ? `${b.balances[o.id].toFixed(4)} ETH` : '…'}</small></button>`).join('')}</div></div>
     <div class="fld"><span class="fl">How much <em>minimum $${TOPUP_MIN}</em></span><div class="pills br-amts">${TOPUP_USD.map(u => `<button type="button" data-busd="${u}" class="${!b.custom && b.usd === u ? 'on' : ''}">$${u}</button>`).join('')}<label class="br-custom ${b.custom ? 'on' : ''}"><span>$</span><input id="brAmt" inputmode="decimal" autocomplete="off" placeholder="Other" aria-label="Custom amount in dollars" value="${b.custom ? esc(b.usd) : ''}"></label></div></div>
     <div class="br-quote" id="brQuote"><span class="faint">Getting a live quote from Relay…</span></div>
     <button class="btn primary" id="brGo" disabled>Getting a quote…</button>
@@ -1498,13 +1503,13 @@ async function loadBridgeBalances() {
   const b = state.bridge, addr = state.wallet.address;
   if (!addr || b.balFor === addr) return;
   b.balFor = addr;
-  await Promise.all(ORIGINS.map(async o => {
+  await Promise.all([RH_DIRECT, ...ORIGINS].map(async o => {
     b.balances[o.id] = await rpcBalance(o.rpc, addr);
     const el = $(`[data-bbal="${o.id}"]`);
     if (el) el.textContent = b.balances[o.id] == null ? 'n/a' : `${b.balances[o.id].toFixed(4)} ETH`;
   }));
   // Start from the chain with the most ETH, unless the user already picked one.
-  const best = ORIGINS.filter(o => b.balances[o.id] > 0).sort((x, y) => b.balances[y.id] - b.balances[x.id])[0];
+  const best = originsFor(b.target).filter(o => b.balances[o.id] > 0).sort((x, y) => b.balances[y.id] - b.balances[x.id])[0];
   if (!b.picked && best && best.id !== b.origin) { b.origin = best.id; $$('[data-borigin]').forEach(x => x.classList.toggle('on', Number(x.dataset.borigin) === b.origin)); }
   quoteBridge();
 }
@@ -1516,7 +1521,8 @@ function quoteBridge() {
     const b = state.bridge, w = state.wallet, out = $('#brQuote'), go = $('#brGo');
     if (!w.address || !out) return;
     const token = ++b.token;
-    const origin = ORIGINS.find(o => o.id === b.origin);
+    const origin = originsFor(b.target).find(o => o.id === b.origin) || ORIGINS[0];
+    b.origin = origin.id;
     const ethUsd = state.data && state.data.ethUsd;
     if (!ethUsd) { out.innerHTML = '<span class="faint">Waiting for the live ETH price…</span>'; return; }
     if (!(b.usd >= TOPUP_MIN && b.usd <= TOPUP_MAX)) {
@@ -1526,6 +1532,15 @@ function quoteBridge() {
     }
     const wei = BigInt(Math.round((b.usd / ethUsd) * 1e6)) * 10n ** 12n;
     go.disabled = true; go.textContent = 'Getting a quote…';
+    const row = (k, v, cls = '') => `<div class="br-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
+    if (origin.direct) {
+      // Already on Robinhood Chain: a plain transfer to the agent wallet, no bridge and no Relay fee.
+      const sendEth = Number(wei) / 1e18, have = b.balFor === w.address ? b.balances[origin.id] : null, short = have != null && have < sendEth;
+      b.quote = { direct: true, wei, origin: origin.id };
+      out.innerHTML = `<div class="br-receipt">${row('You send', `${sendEth.toFixed(5)} ETH on Robinhood Chain <em>${usd(b.usd)}</em>`)}${row('Network fee', 'under $0.01')}${row('Arrives', `${sendEth.toFixed(5)} ETH`, 'total')}${row('Arrives in', 'a few seconds')}${b.destBal != null ? row('Agent balance', `${b.destBal.toFixed(5)} ETH <span class="arrow">→</span> about ${(b.destBal + sendEth).toFixed(5)} ETH`) : ''}</div>${short ? `<div class="warn">You have ${have.toFixed(5)} ETH on Robinhood Chain, which is not enough. Pick a smaller amount or bring ETH from another chain.</div>` : ''}`;
+      go.disabled = short; go.innerHTML = `Send ${usd(b.usd)} to the agent <span class="arr">→</span>`;
+      return;
+    }
     try {
       const r = await fetch(`${RELAY_API}/quote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: w.address, recipient: bridgeRecipient(), originChainId: origin.id, destinationChainId: RH, originCurrency: ZERO_ADDR, destinationCurrency: ZERO_ADDR, amount: wei.toString(), tradeType: 'EXACT_INPUT' }) });
       const q = await r.json();
@@ -1537,7 +1552,6 @@ function quoteBridge() {
       const sendEth = Number(wei) / 1e18, gotEth = Number(got.amountFormatted || 0);
       const have = b.balFor === w.address ? b.balances[origin.id] : null;
       const short = have != null && have < sendEth;
-      const row = (k, v, cls = '') => `<div class="br-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
       out.innerHTML = `<div class="br-receipt">
           ${row('You send', `${sendEth.toFixed(5)} ETH on ${origin.name} <em>${usd(b.usd)}</em>`)}
           ${row(`Network fee on ${origin.name}`, feeText(gasUsd))}
@@ -1580,9 +1594,31 @@ async function pollRelay(endpoint) {
   }
   throw new Error('Still on its way. Check your wallet on Robinhood Chain in a minute.');
 }
+async function sendDirect(q) {
+  const b = state.bridge, w = state.wallet, to = bridgeRecipient();
+  if (!to) return;
+  b.busy = true;
+  if ($('#brGo')) $('#brGo').disabled = true;
+  try {
+    bridgeStatus('wait', 'Switch your wallet to Robinhood Chain');
+    await ensureChain(w.provider);
+    bridgeStatus('wait', 'Confirm the transfer in your wallet');
+    const hash = await w.provider.request({ method: 'eth_sendTransaction', params: [{ from: w.address, to, value: `0x${q.wei.toString(16)}` }] });
+    bridgeStatus('ok', 'Sent to the agent wallet on Robinhood Chain.', `${WALLET_CHAIN.blockExplorerUrls[0]}/tx/${hash}`);
+    toast('Sent. The agent balance updates in a few seconds.', 'ok');
+    b.balFor = null;
+    setTimeout(() => { state.agentSig = ''; loadAgent(); }, 4000);
+  } catch (e) {
+    bridgeStatus('bad', e.message || 'The wallet did not send it.');
+  } finally {
+    b.busy = false;
+    if ($('#brGo')) $('#brGo').disabled = false;
+  }
+}
 async function runBridge() {
   const b = state.bridge, w = state.wallet, q = b.quote;
   if (!q || b.busy || !w.provider) return;
+  if (q.direct) return sendDirect(q);
   const origin = ORIGINS.find(o => o.id === q.origin);
   const txSteps = q.steps.filter(s => s.kind === 'transaction');
   const it = txSteps.length === 1 && q.steps.length === 1 ? txSteps[0].items[0] : null;
@@ -1764,7 +1800,7 @@ async function loadMe() {
     state.meStatus = st;
     const sig = JSON.stringify([st.rules, st.lastRun && st.lastRun.at, st.events[0] && st.events[0].id, st.paper, st.approvals, st.telegram]);
     const editing = $('#myRuleForm') && $('#myRuleForm').contains(document.activeElement);
-    if (state.route === 'my' && !state.live.playing && !editing && sig !== state.meSig) { state.meSig = sig; renderMy(); }
+    if (state.route === 'my' && (!state.live.playing || state.forceRender) && !editing && sig !== state.meSig) { state.forceRender = false; state.meSig = sig; renderMy(); }
     if (state.route === 'receipts') renderReceipts();
     if (state.route === 'stream' && state.streamKind === 'me') streamTick(st.lastRun);
     const m = location.hash.match(/approve=([a-z0-9_]+)/i);
@@ -1892,9 +1928,10 @@ function renderMy() {
   <div class="agent-grid">
     <div>
       <div class="card panel">
-        <h3>My rules</h3>
-        <p class="sub">Up to 5 active rules. Each one fires once, then you can arm the next.</p>
-        <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">${ic('flag')}</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span><button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
+        <h3>My rules ${active.length ? '<button class="btn soft xs" data-mysleep="1">Put my agent to sleep</button>' : st.rules.some(r => r.status === 'paused') ? '<button class="btn primary xs" data-mysleep="0">Wake it back up</button>' : ''}</h3>
+        <p class="sub">Up to 5 active rules. Each one fires once, then you can arm the next. Paused rules are skipped until you resume them.</p>
+        ${!st.rules.some(r => r.mode === 'approve') ? `<div class="callout calm" style="margin-bottom:12px"><span class="ic">${ic('up', 18)}</span><div><b>Ready for real money?</b> Arm a rule on a Robinhood Chain YT and set <b>With</b> to <b>Real, I approve</b>. When the rule is met and SERV agrees, you get a one-tap trade to sign in your own wallet. You can also buy any Robinhood YT yourself from its Trade button. Real trades need a little ETH on Robinhood Chain. <button class="linkish" data-topup="self">Top up</button></div></div>` : ''}
+        <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">${ic('flag')}</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span>${r.status === 'done' ? '' : `<button class="btn soft xs" data-mytoggle="${esc(r.id)}">${r.status === 'active' ? 'Pause' : 'Resume'}</button>`}<button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
         ${myRuleBuilderHtml()}
       </div>
     </div>
@@ -1921,7 +1958,8 @@ async function createMyRule() {
   const btn = $('#myRuleCreate'); btn.disabled = true;
   try {
     await meApi('create-rule', { marketId: $('#mMarket').value, dir: segVal($('#mDir')), pct: Number($('#mPct').value), ruleAction: segVal($('#mAction')), sizeUsd: num($('#mSize').value), mode: segVal($('#mMode')) });
-    toast('Rule armed. Your agent checks it every 10 minutes, or press Run my agent.', 'ok');
+    toast('Rule armed. Your agent checks it every 10 minutes, or press Wake my agent.', 'ok');
+    state.forceRender = true;
     state.meSig = '';
     await loadMe();
   } catch (e) {
@@ -1955,7 +1993,9 @@ function handleMyClick(e) {
   if ((el = q('[data-mywallet]'))) { signInWith(state.walletList[Number(el.dataset.mywallet)]); return true; }
   if (q('#myRun') || q('#myRun2')) { runMine(); return true; }
   if (q('#myRuleCreate')) { createMyRule(); return true; }
-  if ((el = q('[data-mydel]'))) { meApi('delete-rule', { id: el.dataset.mydel }).then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
+  if ((el = q('[data-mytoggle]'))) { meApi('toggle-rule', { id: el.dataset.mytoggle }).then(() => { state.forceRender = true; state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
+  if ((el = q('[data-mysleep]'))) { const sleeping = el.dataset.mysleep === '1'; meApi(sleeping ? 'sleep' : 'wake').then(() => { toast(sleeping ? 'Your agent is asleep. Its rules are paused until you wake it.' : 'Your agent is awake. It checks your rules every 10 minutes.', 'ok'); state.forceRender = true; state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
+  if ((el = q('[data-mydel]'))) { meApi('delete-rule', { id: el.dataset.mydel }).then(() => { state.forceRender = true; state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
   if ((el = q('[data-approve]'))) { const a = state.meStatus.approvals.find(x => x.id === el.dataset.approve); if (a) { state.trade.size = a.usd; openTrade(a.marketId); } return true; }
   if (q('#myTg')) { meApi('telegram-link').then(j => { window.open(j.url, '_blank', 'noopener'); toast('Press Start in Telegram to link your agent.', 'ok'); }).catch(err => toast(err.message, 'err')); return true; }
   if (q('#myReset')) { if (confirm('Reset your paper portfolio to $1,000?')) meApi('reset').then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }

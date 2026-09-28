@@ -1,7 +1,7 @@
 // POST /api/me: "My agent". Public actions: nonce, verify (wallet sign-in). With the x-bandit-session header:
 // status, create-rule, delete-rule, run, telegram-link, reset.
 import { issueNonce, verifySignIn, sessionAddress } from '../lib/session.js';
-import { userStatus, createUserRule, deleteUserRule, runUserAgent, telegramLinkFor, resetPaper, ensureUser } from '../lib/useragent.js';
+import { userStatus, createUserRule, deleteUserRule, setUserRules, runUserAgent, telegramLinkFor, resetPaper, ensureUser } from '../lib/useragent.js';
 import { storeReady, rateLimited } from '../lib/store.js';
 
 const json = (status, body) => new Response(JSON.stringify(body), {
@@ -33,6 +33,9 @@ export async function POST(request) {
       return json(200, { rule: await createUserRule(addr, body) });
     }
     if (action === 'delete-rule') { await deleteUserRule(addr, String(body.id)); return json(200, { ok: true }); }
+    if (action === 'toggle-rule') return json(200, await setUserRules(addr, { id: String(body.id) }));
+    if (action === 'sleep') return json(200, await setUserRules(addr, { on: false }));
+    if (action === 'wake') return json(200, await setUserRules(addr, { on: true }));
     if (action === 'run') {
       if (await rateLimited('urun', addr, 1, 30)) return json(429, { error: 'Your agent just ran. Give it 30 seconds.' });
       return json(200, await runUserAgent(addr, { force: true, source: 'you' }));

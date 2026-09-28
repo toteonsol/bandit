@@ -553,6 +553,6 @@ export function createWorld(canvas, { markets = () => [], mascot = '/art/mascot.
     setHud(h) { Object.assign(S.hud, h); },
     isPlaying: () => S.playing,
     isRecording: () => Boolean(S.rec),
-    destroy() { S.dead = true; cancelAnimationFrame(raf); },
+    destroy() { S.dead = true; S.token++; if (S.walk) { const done = S.walk.done; S.walk = null; done(); } cancelAnimationFrame(raf); },
   };
 }
