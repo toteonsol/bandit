@@ -5,7 +5,9 @@
   "type": "module",
   "description": "BANDIT: Pendle yield bands, read by SERV Reasoning",
   "scripts": {
-    "dev": "node dev-server.mjs"
+    "dev": "node dev-server.mjs",
+    "agent:wallet": "node scripts/new-agent-wallet.mjs",
+    "owner:key": "node scripts/new-owner-key.mjs"
   },
   "dependencies": {
     "openai": "^7.23.0",
