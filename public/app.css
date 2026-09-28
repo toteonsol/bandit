@@ -234,7 +234,7 @@ img{display:block;max-width:100%}
 .mascot.awake img{animation:hop .9s var(--ease) infinite alternate}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03) translateY(1px)}}
 @keyframes hop{from{transform:translateY(0)}to{transform:translateY(-6px)}}
-.zzz{position:absolute;top:-4px;right:-6px;font-family:var(--font-display);font-weight:700;color:var(--cream);pointer-events:none}
+.zzz{position:absolute;top:-16px;right:10px;font-family:var(--font-display);font-weight:700;color:var(--cream);pointer-events:none}
 .zzz span{position:absolute;opacity:0;animation:zz 3.6s infinite}
 .zzz span:nth-child(1){font-size:13px;animation-delay:0s}
 .zzz span:nth-child(2){font-size:17px;animation-delay:1.2s;left:9px}

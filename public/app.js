@@ -54,14 +54,18 @@ function toast(text, kind = '') {
 /* ---------- router ---------- */
 function route() {
   const h = location.hash.replace(/^#\/?/, '').split('?')[0];
-  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts' }[h] || 'farm';
+  const r = { bands: 'bands', agent: 'agent', receipts: 'receipts', my: 'my' }[h] || 'farm';
   const changed = r !== state.route;
   state.route = r;
   $$('.view').forEach(v => v.classList.toggle('on', v.id === `view-${r}`));
   $$('[data-route]').forEach(a => a.classList.toggle('on', a.dataset.route === r));
   if (h === 'farm-board') setTimeout(() => $('#farm-board').scrollIntoView({ behavior: 'smooth' }), 40);
   else if (changed) window.scrollTo({ top: 0 });
+  // Only one Agent Live pipeline lives in the DOM at a time (they share element ids).
+  if (r !== 'agent') $('#agentRoot').innerHTML = '';
+  if (r !== 'my') $('#myRoot').innerHTML = '';
   if (r === 'agent') { state.agentSig = ''; renderAgent(); }
+  if (r === 'my') { state.meSig = ''; renderMy(); loadMe(); }
   if (r === 'receipts') renderReceipts();
   if (r === 'agent' || r === 'receipts') loadAgent();
 }
@@ -836,8 +840,224 @@ async function ownerAction(body) {
   catch (e) { toast(e.message, 'err'); }
 }
 
+/* ---------- My agent (personal paper / one-tap approve agent) ---------- */
+state.me = (() => { try { const v = JSON.parse(store.get('bandit.me') || 'null'); return v && Date.parse(v.expires) > Date.now() ? v : null; } catch { return null; } })();
+state.meStatus = null;
+state.meSig = '';
+let meTimer = null;
+
+async function meApi(action, extra = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (state.me) headers['x-bandit-session'] = state.me.token;
+  const r = await fetch('/api/me', { method: 'POST', headers, body: JSON.stringify({ action, ...extra }) });
+  const j = await r.json().catch(() => null);
+  if (r.status === 401 && state.me && action !== 'nonce' && action !== 'verify') { state.me = null; store.set('bandit.me', null); }
+  if (!r.ok || !j) throw new Error((j && j.error) || `HTTP ${r.status}`);
+  return j;
+}
+const toHexUtf8 = str => '0x' + [...new TextEncoder().encode(str)].map(b => b.toString(16).padStart(2, '0')).join('');
+
+async function signInWith(p) {
+  try {
+    if (!state.wallet.address || state.wallet.provider !== p.provider) await connectWallet(p);
+    const address = state.wallet.address;
+    if (!address) return;
+    const { nonce, message } = await meApi('nonce', { address });
+    toast('Sign the message in your wallet. It is free and moves no funds.');
+    const signature = await state.wallet.provider.request({ method: 'personal_sign', params: [toHexUtf8(message), address] });
+    const session = await meApi('verify', { address, nonce, signature });
+    state.me = session;
+    store.set('bandit.me', JSON.stringify(session));
+    toast('Your agent is ready with $1,000 of paper money.', 'ok');
+    state.meSig = '';
+    await loadMe();
+  } catch (e) {
+    toast(e.message || 'Sign-in was cancelled.', 'err');
+  }
+}
+
+async function loadMe() {
+  clearTimeout(meTimer);
+  if (state.route !== 'my') return;
+  if (!state.me) { renderMy(); return; }
+  try {
+    const st = await meApi('status');
+    state.meStatus = st;
+    const sig = JSON.stringify([st.rules, st.lastRun && st.lastRun.at, st.events[0] && st.events[0].id, st.paper, st.approvals, st.telegram]);
+    const editing = $('#myRuleForm') && $('#myRuleForm').contains(document.activeElement);
+    if (!state.live.playing && !editing && sig !== state.meSig) { state.meSig = sig; renderMy(); }
+    const m = location.hash.match(/approve=([a-z0-9_]+)/i);
+    if (m) {
+      const a = st.approvals.find(x => x.id === m[1]);
+      history.replaceState(null, '', '#/my');
+      if (a) { state.trade.size = a.usd; openTrade(a.marketId); toast('SERV confirmed this trade. Review it and sign in your wallet.', 'ok'); }
+    }
+  } catch (e) {
+    if (!state.me) renderMy(); else toast(e.message, 'err');
+  }
+  if (state.route === 'my') meTimer = setTimeout(loadMe, 20_000);
+}
+
+function myRuleBuilderHtml() {
+  const ms = (state.data ? state.data.markets : []).filter(m => !m.distorted && formed(m))
+    .sort((a, b) => ((b.range && b.range.ratio) || 0) - ((a.range && a.range.ratio) || 0));
+  const opt = m => `<option value="${esc(m.id)}" data-rh="${m.chainId === RH ? 1 : 0}">YT-${esc(m.name)} · ${esc(m.chainName)} · P${Math.round(m.band.percentile)}${m.range ? ` · ${upPct(m.range.toHigh)} to high` : ''}</option>`;
+  return `<div class="card" style="margin-top:14px;padding:16px;background:var(--bg-2)"><div class="form" id="myRuleForm">
+    <label class="fld"><span class="fl">Market</span><select class="inp" id="mMarket">${ms.map(opt).join('')}</select></label>
+    <div class="row2">
+      <div class="fld"><span class="fl">Trigger when band is</span><div class="seg" id="mDir"><button type="button" data-v="below" class="on lo">Below</button><button type="button" data-v="above" class="hi">Above</button></div></div>
+      <label class="fld"><span class="fl">Percentile <em id="mPctV">P25</em></span><input type="range" id="mPct" min="1" max="99" value="25"></label>
+    </div>
+    <div class="row2">
+      <div class="fld"><span class="fl">Action</span><div class="seg" id="mAction"><button type="button" data-v="enter" class="on">Enter YT</button><button type="button" data-v="exit">Exit YT</button></div></div>
+      <label class="fld"><span class="fl">Size</span><span class="money"><input class="inp" id="mSize" inputmode="decimal" value="100"></span></label>
+    </div>
+    <div class="fld"><span class="fl">Mode</span><div class="seg" id="mMode"><button type="button" data-v="paper" class="on">Paper (fully autonomous)</button><button type="button" data-v="approve">One-tap approve</button></div></div>
+    <p class="help" id="mModeHelp">Paper: your agent trades $1,000 of paper money on its own at Pendle's live prices, only when SERV Reasoning confirms.</p>
+    <div class="err-line hidden" id="mErr"></div>
+    <div><button class="btn primary sm" type="button" id="myRuleCreate">Arm this rule</button></div>
+  </div></div>`;
+}
+
+function myEventHtml(e) {
+  const icon = { paper: '◌', approval: '✍', held: '⏸', rule: '⚑' }[e.type] || '•';
+  let title = e.text || e.type, body = '';
+  if (e.type === 'paper') { title = e.text; body = e.headline || ''; }
+  if (e.type === 'held') { title = `SERV held off on ${e.marketName}`; body = e.headline || ''; }
+  if (e.type === 'approval') { title = `SERV confirmed ${e.marketName}: waiting for your signature`; body = e.headline || ''; }
+  const reason = e.reason ? `<div class="es"><b style="color:var(--text)">Reason:</b> ${clean(e.reason)}</div>` : '';
+  return `<div class="evt ${e.type === 'paper' ? 'simulated' : e.type === 'approval' ? 'trade' : esc(e.type)}"><span class="ei">${icon}</span><div><div class="et">${clean(title)}</div>${body ? `<div class="es">${clean(body)}</div>` : ''}${reason}${e.model ? `<div class="em">SERV ${esc(e.model)}</div>` : ''}</div><span class="ea">${ago(e.at)}</span></div>`;
+}
+
+function renderMy() {
+  const root = $('#myRoot');
+  if (!root || state.route !== 'my') return;
+  if (!state.me) {
+    const list = state.providers.length ? state.providers : (window.ethereum ? [{ info: { uuid: 'injected', name: 'Browser wallet', icon: '' }, provider: window.ethereum }] : []);
+    state.walletList = list;
+    root.innerHTML = `<div class="card agent-hero" style="margin-top:14px">
+      <div class="mascot sleep"><img src="/art/mascot.svg" alt=""><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div>
+      <div><h2>Your own BANDIT agent</h2><p class="muted" style="margin:8px 0 14px;max-width:560px">Sign in with any wallet and get a personal agent with <b style="color:var(--text)">$1,000 of paper money</b>. Arm rules on any Pendle YT and it trades on its own, with real SERV Reasoning decisions and live prices. Switch a rule to one-tap approve and it asks you to sign real trades on Robinhood Chain from your own wallet.</p>
+        ${list.length ? `<div class="wallets" style="max-width:420px">${list.map((p, i) => `<button class="wallet-btn" data-mywallet="${i}">${p.info.icon ? `<img src="${esc(p.info.icon)}" alt="">` : '<span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim);color:var(--lime)">◆</span>'}Sign in with ${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout" style="max-width:560px"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask to create your agent. Everything else on BANDIT works without one.</div></div>'}
+        <p class="help" style="margin-top:10px">Signing in is a free message signature: no gas, no funds, no approvals.</p></div><div></div></div>
+      <div class="steps" style="margin-top:14px">
+        <article class="card step"><span class="no">01</span><img src="/art/step-rule.svg" alt=""><h3>Arm a rule</h3><p>Enter a YT when it sits near the floor of its range, exit near the top. Any Pendle market, any chain.</p></article>
+        <article class="card step"><span class="no">02</span><img src="/art/step-price.svg" alt=""><h3>SERV decides</h3><p>Every trigger goes to SERV Reasoning, which confirms or holds off with a written reason you can read.</p></article>
+        <article class="card step"><span class="no">03</span><img src="/art/step-sleep.svg" alt=""><h3>It runs without you</h3><p>Your agent checks every 10 minutes, keeps a paper portfolio with live P&amp;L, and pings your Telegram.</p></article>
+      </div>`;
+    return;
+  }
+  const st = state.meStatus;
+  if (!st) { root.innerHTML = '<div class="card board-msg" style="margin-top:14px"><span class="sk" style="width:50%;margin:0 auto"></span></div>'; return; }
+  const p = st.paper;
+  const pnlColor = p.pnlUsd > 0 ? 'var(--lime)' : p.pnlUsd < 0 ? 'var(--hi)' : 'var(--text)';
+  const active = st.rules.filter(r => r.status === 'active');
+  root.innerHTML = `
+  <div class="card agent-hero" style="margin-top:14px">
+    <div class="mascot sleep" id="mascot"><img src="/art/mascot.svg" alt="Your BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div>
+    <div>
+      <h2>Your BANDIT agent</h2>
+      <div class="state"><span class="state-pill dry"><i></i>Paper mode · $${p.startUsd.toLocaleString('en-US')} start</span><span class="badge none plain">${esc(shortAddr(st.address))}</span>${st.telegram.linked ? '<span class="badge confirmed">Telegram linked</span>' : ''}</div>
+      <div class="agent-stats">
+        <div class="stat"><div class="v">$${Number(p.totalUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div><div class="k">Portfolio value</div></div>
+        <div class="stat"><div class="v" style="color:${pnlColor}">${p.pnlUsd >= 0 ? '+' : ''}$${Math.abs(p.pnlUsd).toFixed(2)}</div><div class="k">P&amp;L (${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct}%)</div></div>
+        <div class="stat"><div class="v">$${Number(p.cashUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div><div class="k">Paper cash</div></div>
+        <div class="stat"><div class="v">${active.length}</div><div class="k">Rules armed</div></div>
+      </div>
+    </div>
+    <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn primary" id="myRun">Run my agent <span class="arr">→</span></button>
+      ${st.telegram.linked ? '' : `<button class="btn tg sm" id="myTg" ${st.telegram.bot ? '' : 'disabled'}>Connect Telegram</button>`}
+      <button class="btn soft xs" id="mySignOut">Sign out</button>
+    </div>
+  </div>
+  ${st.approvals.length ? `<div class="card panel" style="margin-top:14px;border-color:rgba(200,242,90,.35)"><h3>Waiting for your signature</h3><p class="sub">SERV Reasoning confirmed these on Robinhood Chain. Nothing moves until you sign in your own wallet.</p><div class="rules">${st.approvals.map(a => `<div class="rule"><span class="ico">✍</span><div><div class="d">Enter $${a.usd} of ${esc(a.name)}</div><div class="r">${clean(a.reason)}</div></div><div class="rule-acts"><button class="btn primary xs" data-approve="${esc(a.id)}">Review and sign</button></div></div>`).join('')}</div></div>` : ''}
+  <div class="agent-grid">
+    <div>
+      <div class="card live-card">
+        <h3>Agent Live <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
+        <p class="sub">Your agent's runs, step by step. It wakes every 10 minutes on its own; Run my agent wakes it now.</p>
+        ${pipelineHtml()}
+        <div class="live-buddy"><div class="buddy sleep" id="buddy"><img src="/art/mascot.svg" alt="BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div><div class="bubble" id="bubble">${active.length ? 'Asleep. I check your rules every 10 minutes.' : 'Arm a rule below and I will start watching.'}</div></div>
+        <div class="mkt-strip" id="mktStrip"></div>
+        <div class="console" id="console"><div class="empty">No runs yet. Arm a rule, then press Run my agent.</div></div>
+        <div class="live-actions"><button class="btn primary sm" id="myRun2">Run my agent</button><button class="btn soft sm" id="myReplay" ${st.lastRun && st.lastRun.steps && st.lastRun.steps.length ? '' : 'disabled'}>Replay last run</button><span class="when">${st.lastRun ? `Last run ${ago(st.lastRun.at)} · ${esc(st.lastRun.source)}` : ''}</span></div>
+      </div>
+      <div class="card panel" style="margin-top:14px">
+        <h3>My rules</h3>
+        <p class="sub">Up to 5 active rules. Each one fires once, then you can arm the next.</p>
+        <div class="rules">${st.rules.length ? st.rules.map(r => `<div class="rule"><span class="ico">⚑</span><div><div class="d">${clean(r.description)}</div><div class="r">${r.lastResult ? clean(r.lastResult) : 'Not checked yet.'}${r.lastCheckedAt ? ` · checked ${ago(r.lastCheckedAt)}` : ''}</div></div><div class="rule-acts"><span class="st ${esc(r.status)}">${esc(r.status)}</span><button class="btn soft xs" data-mydel="${esc(r.id)}">Delete</button></div></div>`).join('') : '<div class="empty" style="padding:14px"><img src="/art/empty-state.svg" alt="" style="width:120px"><b>No rules yet</b>Pick a YT near the floor of its range to start.</div>'}</div>
+        ${myRuleBuilderHtml()}
+      </div>
+    </div>
+    <div>
+      <div class="card panel"><h3>Paper portfolio <button class="btn soft xs" id="myReset">Reset</button></h3><p class="sub">Marked to Pendle's live YT prices. Paper results, not a promise of real ones.</p>
+        ${st.positions.length ? `<table class="ledger"><thead><tr><th>Position</th><th>Cost</th><th>Value</th><th>P&amp;L</th></tr></thead><tbody>${st.positions.map(x => `<tr><td>${esc(x.name)}<div class="faint" style="font-size:11px;font-weight:500">${esc(x.chainName)} · P${Math.round(x.entry.percentile)} at entry${x.percentileNow != null ? `, P${Math.round(x.percentileNow)} now` : ''}</div></td><td>${usd(x.costUsd)}</td><td>${x.valueUsd == null ? 'n/a' : usd(x.valueUsd)}</td><td style="color:${(x.pnlUsd || 0) >= 0 ? 'var(--lime)' : 'var(--hi)'}">${x.pnlPct == null ? 'n/a' : `${x.pnlPct >= 0 ? '+' : ''}${x.pnlPct}%`}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:18px"><b>No positions yet</b>Your agent opens one when a rule fires and SERV confirms.</div>'}
+      </div>
+      <div class="card panel" style="margin-top:14px"><h3>Activity</h3><p class="sub">Newest first.</p>${st.events.length ? `<div class="timeline">${st.events.map(myEventHtml).join('')}</div>` : '<p class="help">Nothing yet.</p>'}</div>
+    </div>
+  </div>`;
+  if (st.lastRun && st.lastRun.steps && st.lastRun.steps.length) showRunStatic(st.lastRun);
+  bindMyBuilder();
+}
+
+function bindMyBuilder() {
+  if (!$('#myRuleForm')) return;
+  bindSeg($('#mDir')); bindSeg($('#mAction'));
+  bindSeg($('#mMode'), v => { $('#mModeHelp').textContent = v === 'approve' ? 'One-tap approve: when your rule fires and SERV Reasoning confirms, you get a link to review and sign the real trade in your own wallet. Robinhood Chain markets only.' : "Paper: your agent trades $1,000 of paper money on its own at Pendle's live prices, only when SERV Reasoning confirms."; });
+  $('#mPct').addEventListener('input', e => { $('#mPctV').textContent = `P${e.target.value}`; });
+}
+
+async function createMyRule() {
+  const btn = $('#myRuleCreate'); btn.disabled = true;
+  try {
+    await meApi('create-rule', { marketId: $('#mMarket').value, dir: segVal($('#mDir')), pct: Number($('#mPct').value), ruleAction: segVal($('#mAction')), sizeUsd: num($('#mSize').value), mode: segVal($('#mMode')) });
+    toast('Rule armed. Your agent checks it every 10 minutes, or press Run my agent.', 'ok');
+    state.meSig = '';
+    await loadMe();
+  } catch (e) {
+    $('#mErr').textContent = e.message; $('#mErr').classList.remove('hidden');
+  } finally { if ($('#myRuleCreate')) $('#myRuleCreate').disabled = false; }
+}
+
+async function runMine() {
+  const btns = ['#myRun', '#myRun2'].map(x => $(x)).filter(Boolean);
+  btns.forEach(b => { b.disabled = true; });
+  const token = ++state.live.token;
+  state.live.playing = true;
+  wake(true); say('Waking up. Checking your rules…');
+  resetPipeline(); setNode(0, { stage: 'scan' });
+  $('#console').innerHTML = '<div class="ln"><span class="st scan">scan</span><div class="lt">Waking up and scanning Pendle markets<span class="thinking-dots"><i></i><i></i><i></i></span></div></div>';
+  const hint = setTimeout(() => { if (token === state.live.token) { flowWires(0, 3); setNode(3, { stage: 'serv' }); say('Let me ask SERV Reasoning about this one…'); } }, 2800);
+  try {
+    const run = await meApi('run');
+    clearTimeout(hint); state.live.playing = false;
+    await playRun(run);
+    state.meSig = '';
+    await loadMe();
+  } catch (e) {
+    clearTimeout(hint); state.live.playing = false; resetPipeline(); wake(false); say(e.message, 'no'); toast(e.message, 'err');
+  } finally { btns.forEach(b => { b.disabled = false; }); }
+}
+
+function handleMyClick(e) {
+  const q = sel => e.target.closest(sel);
+  let el;
+  if ((el = q('[data-mywallet]'))) { signInWith(state.walletList[Number(el.dataset.mywallet)]); return true; }
+  if (q('#myRun') || q('#myRun2')) { runMine(); return true; }
+  if (q('#myReplay')) { if (state.meStatus && state.meStatus.lastRun) playRun(state.meStatus.lastRun); return true; }
+  if (q('#myRuleCreate')) { createMyRule(); return true; }
+  if ((el = q('[data-mydel]'))) { meApi('delete-rule', { id: el.dataset.mydel }).then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
+  if ((el = q('[data-approve]'))) { const a = state.meStatus.approvals.find(x => x.id === el.dataset.approve); if (a) { state.trade.size = a.usd; openTrade(a.marketId); } return true; }
+  if (q('#myTg')) { meApi('telegram-link').then(j => { window.open(j.url, '_blank', 'noopener'); toast('Press Start in Telegram to link your agent.', 'ok'); }).catch(err => toast(err.message, 'err')); return true; }
+  if (q('#myReset')) { if (confirm('Reset your paper portfolio to $1,000?')) meApi('reset').then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
+  if (q('#mySignOut')) { state.me = null; state.meStatus = null; store.set('bandit.me', null); renderMy(); return true; }
+  return false;
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
+  if (handleMyClick(e)) return;
   const q = sel => e.target.closest(sel);
   let el;
   if ((el = q('[data-ask]'))) return openAsk(el.dataset.ask);

@@ -16,6 +16,9 @@ try {
   }
 } catch {}
 
+// No Redis configured locally? Use the in-memory store so the agent can be tested end to end.
+if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) process.env.BANDIT_DEV_MEMORY_STORE = '1';
+
 const readBody = req => new Promise((resolve, reject) => {
   const chunks = [];
   req.on('data', c => chunks.push(c)).on('end', () => resolve(Buffer.concat(chunks))).on('error', reject);

@@ -1,13 +1,38 @@
 {
   "functions": {
-    "api/ask.js": { "maxDuration": 60 },
-    "api/agent.js": { "maxDuration": 60 },
-    "api/watch.js": { "maxDuration": 60 },
-    "api/trade.js": { "maxDuration": 60 },
-    "api/markets.js": { "maxDuration": 30 },
-    "api/telegram.js": { "maxDuration": 15 }
+    "api/ask.js": {
+      "maxDuration": 60
+    },
+    "api/agent.js": {
+      "maxDuration": 60
+    },
+    "api/watch.js": {
+      "maxDuration": 60
+    },
+    "api/trade.js": {
+      "maxDuration": 60
+    },
+    "api/markets.js": {
+      "maxDuration": 30
+    },
+    "api/telegram.js": {
+      "maxDuration": 15
+    },
+    "api/me.js": {
+      "maxDuration": 60
+    },
+    "api/watch-users.js": {
+      "maxDuration": 60
+    }
   },
   "crons": [
-    { "path": "/api/watch", "schedule": "*/10 * * * *" }
+    {
+      "path": "/api/watch",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/watch-users",
+      "schedule": "5-59/10 * * * *"
+    }
   ]
 }
