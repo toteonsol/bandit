@@ -1,0 +1,29 @@
+BANDIT DEMO SCRIPT (about 80 seconds)
+Record at 1440 x 900 on https://bandit-bands.vercel.app. Warm it up first: load the page once and run one Ask BANDIT query before recording, so the take has no cold start.
+
+0:00 to 0:08  OPEN ON THE BOARD (top of page)
+Show: the BANDIT header, the LIVE pill, and the hero line.
+Say: "This is BANDIT. It takes every live Pendle market on Ethereum and Arbitrum and places today's implied APY inside that market's own 90-day band."
+
+0:08 to 0:22  SIGNAL CARDS
+Show: hover the three cards: nearest the floor, nearest the top, band forming.
+Say: "Up top, BANDIT pulls out the extremes. This one sits near the floor of its 90-day band. This one sits near the top: its fixed rate is near the high end of its range. And this market is too new, so BANDIT labels it band forming instead of faking a percentile."
+
+0:22 to 0:38  THE BAND BOARD
+Show: scroll to the board. Point at one band gauge, its min and max labels, the P number, then the 7-day change.
+Say: "Each row is a band gauge: lowest to highest daily implied APY over 90 days, with a dot for today. P13 means only 13 percent of days were lower. You also get underlying APY, liquidity, and the 7-day move."
+Show: click the Arbitrum chip, then All chains again. Click the Liquidity header to sort.
+Say: "Filter by chain, sort by anything. All of it is live from Pendle's API."
+
+0:38 to 0:50  ASK BANDIT
+Show: scroll to Ask BANDIT. Type 25,000 as the size, pick Low risk, and type: "I want a fixed rate on stablecoins for one to three months." Click Ask BANDIT.
+Say: "Now the agent. I tell BANDIT my size and risk level. It sends the top markets' band data to SERV Reasoning as structured JSON."
+Show: the loader, "SERV Reasoning is reading 20 markets".
+
+0:50 to 1:12  THE REASONING OUTPUT
+Show: the headline, then the ranked cards. Pause on card 1: its band gauge, the band read, why it fits, the trade-offs, the watch tags. Scroll to Main risks.
+Say: "SERV comes back with a ranked read for low risk. Each pick shows where it sits in its band, why it fits my size, and what I give up. Then the main risks: time decay near maturity, thin liquidity, and bands that are still forming."
+
+1:12 to 1:22  CLOSE
+Show: the meta line "Answered by SERV Reasoning", then the footer.
+Say: "Every answer runs on SERV Reasoning, with no fallback model. Data and reasoning only, not financial advice. BANDIT: yield bands, read by SERV."
