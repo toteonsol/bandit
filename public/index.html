@@ -33,7 +33,7 @@
   </a>
   <nav class="tabs" aria-label="Primary">
     <a href="#/" data-route="farm">Home</a>
-    <a href="#/bands" data-route="bands">Bands</a>
+    <a href="#/bands" data-route="bands">Markets</a>
     <a href="#/ask" data-route="ask">Ask BANDIT</a>
     <a href="#/my" data-route="my">My agent</a>
     <a href="#/agent" data-route="agent"><i class="dot" id="tabAgentDot"></i>Live agent</a>
@@ -92,6 +92,7 @@
         <div><span class="eyebrow">Robinhood Chain</span><h2>Where your agent trades</h2><p>Pendle YTs on Robinhood Chain, including tokenized NVDA, PFE and SGOV, with their range and room to run. No project here publishes a points rate yet, so any airdrop value is speculative and BANDIT never invents one.</p></div>
       </div>
       <div class="farm-grid" id="rhGrid"></div>
+      <div class="topup-strip"><span class="ic">⇄</span><div><b>Need ETH on Robinhood Chain?</b><span>Top up from Base, Arbitrum, Optimism or Ethereum with one signature, right here.</span></div><button class="btn soft sm" data-topup="self">Top up</button></div>
     </div>
 
     <div class="section">
@@ -108,29 +109,33 @@
     </div>
   </section>
 
-  <!-- BANDS -->
-  <section class="view" id="view-bands" aria-label="Band board">
+  <!-- MARKETS (every YT, graded) -->
+  <section class="view" id="view-bands" aria-label="Markets">
     <div class="sechead" style="margin-top:14px">
-      <div><span class="eyebrow">Band board</span><h2>Every Pendle market, placed in its band</h2><p>Live implied APY against its own 90-day history, so you can see whether today's rate sits near the floor, near the top, or mid band.</p></div>
+      <div><span class="eyebrow">Every Pendle YT, graded</span><h2>Which YTs are a good entry right now?</h2><p>BANDIT compares each YT's price with its own last 90 days and grades the entry. <b class="gtxt a">A</b> means cheap, with room to run and time left. <b class="gtxt d">D</b> means it is already near its top. Best entries come first. Tap any row to see why.</p></div>
+    </div>
+    <div class="board-tools">
+      <div class="filterbar" id="gradeChips"></div>
       <div class="filterbar" id="chainChips"></div>
     </div>
     <section class="card board" aria-label="Markets">
       <div class="row head" id="boardHead">
-        <button data-sort="name">Market</button>
-        <span class="hide-m hide-l">Chain</span>
-        <span>90-day band position</span>
-        <button class="hide-m" data-sort="pct">Band pctile</button>
-        <button class="hide-m hide-l" data-sort="up">Room to high</button>
-        <button class="hide-m" data-sort="liq">Liquidity</button>
-        <button data-sort="apy">Implied APY</button>
+        <button data-sort="name">YT</button>
+        <button data-sort="grade">Entry grade</button>
+        <span>Price vs its last 90 days</span>
+        <button class="hide-m" data-sort="up">Room to run</button>
+        <button class="hide-m hide-l" data-sort="days">Time left</button>
+        <button class="hide-m hide-l" data-sort="liq">Pool size</button>
+        <button class="hide-m" data-sort="apy">Yield rate</button>
       </div>
       <div id="boardRows"></div>
     </section>
     <div class="method">
-      <div><b>Band</b>Lowest to highest daily implied APY over the last 90 days, including today.</div>
-      <div><b>Percentile</b>Share of those days with a lower implied APY than right now. P12 means 12% of days were lower.</div>
-      <div><b>Band forming</b>Under 14 days of history. BANDIT shows the rate but no percentile until the band has enough days.</div>
-      <div><b>Source</b><span id="srcLine">Pendle hosted API, refreshed every 5 minutes.</span></div>
+      <div><b>Entry grade</b>A to D from the numbers: price vs its own 90 days (45%), room to run vs downside (25%), time left (15%) and pool size (15%), plus a small bonus for a points program. New means under 14 days of history. Risky means the numbers are flagged.</div>
+      <div><b>Price vs its last 90 days</b>The dot sits between the cheapest and the priciest day of the last 90 days. Further left is cheaper.</div>
+      <div><b>Room to run</b>What the YT would gain if its rate got back to its 90-day high, next to what it would lose at its low. The move has to happen before the YT ends.</div>
+      <div><b>Yield rate</b>The yield the market is pricing in (Pendle's implied APY). A YT's price rises and falls with it.</div>
+      <div><b>Source</b><span id="srcLine">Pendle hosted API, refreshed every 5 minutes.</span> Data and reasoning only. Not financial advice.</div>
     </div>
   </section>
 
@@ -204,7 +209,7 @@
 
 <nav class="tabbar" aria-label="Primary">
   <a href="#/" data-route="farm"><span class="ti">✦</span>Home</a>
-  <a href="#/bands" data-route="bands"><span class="ti">≋</span>Bands</a>
+  <a href="#/bands" data-route="bands"><span class="ti">≋</span>Markets</a>
   <a href="#/ask" data-route="ask" class="tb-ask"><span class="tb-orb"><img src="/art/mascot.svg" alt=""></span>Ask</a>
   <a href="#/my" data-route="my"><span class="ti">◉</span>My agent</a>
   <a href="#/agent" data-route="agent"><span class="ti">☾</span>Live</a>
@@ -213,6 +218,16 @@
 <button class="fab" id="fab" aria-label="Ask BANDIT"><img src="/art/mascot.svg" alt=""><span>Ask BANDIT</span></button>
 
 <div class="scrim" id="scrim"></div>
+
+<!-- Top up Robinhood Chain (Relay) -->
+<aside class="sheet" id="bridgeSheet" aria-label="Top up Robinhood Chain">
+  <div class="sheet-head">
+    <img src="/art/logo-mask.svg" alt="" style="border-radius:10px">
+    <div><h3>Top up Robinhood Chain</h3><p>Bridge ETH in one signature with Relay. Your wallet, your funds.</p></div>
+    <button class="x" data-close aria-label="Close">×</button>
+  </div>
+  <div class="sheet-body" id="bridgeBody"></div>
+</aside>
 
 <!-- Share card -->
 <div class="modal wide" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">

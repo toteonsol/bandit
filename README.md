@@ -15,7 +15,8 @@ Data and reasoning only. Not financial advice.
 **No wallet needed**
 - **Home.** Where the YTs sit right now: most room to run, already at the top, biggest 7-day move. Robinhood Chain markets come first, including tokenized NVDA, PFE and SGOV, each with its range and room to run.
 - **Points.** For airdrop hunters: every YT with a points program, points per day per $100, cost per 1,000 points, decay by maturity and YT leverage.
-- **Band board.** Implied APY placed in its 90-day band: P12 means only 12% of days were lower.
+- **Markets, graded for entry.** Every YT gets an entry grade from A to D (or New, or Risky) from its price against its own last 90 days (45%), room to run against the downside (25%), time left (15%) and pool size (15%), plus a small bonus for a points program. Best entries come first, and each row opens the plain reasons behind its grade with one-tap actions.
+- **Top up Robinhood Chain in the app.** A built-in bridge on Relay's API: pick Base, Arbitrum, Optimism or Ethereum, see a live quote, sign one transfer, and watch it land. It appears where money is needed: the trade sheet when a balance is low, My agent, and funding the agent. BANDIT never holds the funds and only sends the exact deposit it quoted.
 - **Ask BANDIT.** Ask in plain words ("Which YTs are near their floor right now?", "Is YT-NVDA a good entry?"). Free, no wallet needed, nothing is traded. SERV Reasoning ranks the YTs and says where each one sits against its own history, how far it could run, and what could go wrong. Every pick has one-tap actions (watch it with your agent, Telegram alert, trade on Robinhood Chain) and every answer gets a share link and an image card.
 - **Telegram alerts.** Pick a market and a band trigger, tap Start in Telegram, and get SERV Reasoning's read when it fires.
 

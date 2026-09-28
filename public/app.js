@@ -27,7 +27,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 
 const state = {
   data: null, byId: new Map(), agent: null, agentSig: '', route: 'farm',
-  farmChain: 'all', chain: String(RH), sort: { key: 'pct', dir: 1 },
+  farmChain: 'all', chain: 'all', sort: { key: 'grade', dir: -1 }, gradeFilter: 'all', openRows: new Set(),
   owner: store.get('bandit.owner'),
   providers: [], walletList: [], wallet: { provider: null, info: null, address: null },
   trade: { step: 'connect', review: null, marketId: null, size: 10 },
@@ -132,7 +132,7 @@ function marketCard(m, rank, mode = 'trade') {
     ${rank ? `<span class="rank-no">${rank}</span>` : ''}
     <div class="top"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>
       <div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="sub">${esc(p.project || m.protocol || 'Pendle')} · ${shortDate(m.expiry)} · ${m.daysToMaturity}d left</div></div></div>
-    <div class="badges"><span class="badge chain c${m.chainId}">${esc(m.chainName)}</span>${mode === 'points' || p.status !== 'none known' ? `<span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>` : ''}${pointsBadge}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
+    <div class="badges">${(gr => `<span class="gchip g-${gr.k}" title="${esc(gr.label)}">${gr.score >= 0 ? `Grade ${gr.g}` : gr.g}</span>`)(entryGrade(m))}<span class="badge chain c${m.chainId}">${esc(m.chainName)}</span>${mode === 'points' || p.status !== 'none known' ? `<span class="badge ${statusCls(p.status)}">${statusLabel(p.status)}</span>` : ''}${pointsBadge}${m.distorted ? `<span class="badge distorted">Distorted: ${esc(m.flags.join(', '))}</span>` : ''}</div>
     <div class="big">${big}<span class="k">${bigK}</span></div>
     <div class="kpis">${kpis.map(([v, k]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
     <div>${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div></div>
@@ -185,38 +185,130 @@ function renderFarm() {
   if (best) { $('#floatCheapest').textContent = `YT-${best.name} · ${upPct(best.range.toHigh)} to high`; $('#floatCheapestSub').textContent = `P${Math.round(best.band.percentile)}, most room to run`; }
 }
 
-/* ---------- bands view ---------- */
+/* ---------- markets board: every YT, graded for entry ---------- */
+// BANDIT's entry grade comes from the numbers alone: price vs its own last 90 days (45%), room to run against
+// the downside (25%), time left (15%) and pool size (15%), plus a small bonus for a published points program.
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const riskyWhy = m => m.flags.includes('thin liquidity') ? 'Risky: very small pool' : m.flags.includes('near expiry') ? 'Risky: ends within days' : 'Risky: extreme rate';
+function entryGrade(m) {
+  if (m.distorted) return { g: 'Risky', k: 'risky', label: riskyWhy(m), score: -2 };
+  if (!formed(m) || !m.range) return { g: 'New', k: 'new', label: `Too new: day ${m.band.days} of 14`, score: -1 };
+  const p = m.band.percentile, up = Math.max(0, m.range.toHigh), down = Math.max(0.001, -m.range.toLow);
+  const score = Math.round(100 * clamp01(
+    0.45 * (1 - p / 100)
+    + 0.25 * clamp01(up / down / 4)
+    + 0.15 * clamp01((m.daysToMaturity - 7) / 53)
+    + 0.15 * clamp01((Math.log10(Math.max(1, m.liquidityUsd)) - 4.7) / 2)
+    + (m.points && m.points.status === 'confirmed points' ? 0.05 : 0)));
+  const g = score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 45 ? 'C' : 'D';
+  const label = p >= 97 ? 'At its top' : p >= 80 ? 'Pricey, little room' : p <= 25 ? (up / down >= 2 ? 'Cheap, room to run' : 'Cheap, could slide') : up / down >= 2 ? 'Fair price, room to run' : 'Middle of its range';
+  return { g, k: g.toLowerCase(), label: m.daysToMaturity < 21 ? `${label}, short time` : label, score };
+}
+const gradeBadge = (gr, big = false) => `<span class="grade g-${gr.k}${big ? ' big' : ''}"${gr.score >= 0 ? ` title="Entry score ${gr.score} out of 100"` : ''}>${gr.g}</span>`;
+const whereLine = m => !formed(m) ? `Too new to judge: ${m.band.days} days of history`
+  : m.band.percentile >= 97 ? `At its ${span(m)}-day high`
+  : m.band.percentile > 50 ? `Pricier than ${Math.round(m.band.percentile)}% of its last ${span(m)} days`
+  : `Cheaper than ${100 - Math.round(m.band.percentile)}% of its last ${span(m)} days`;
+
+// The plain reasons behind a grade, each marked good (ok), neutral (mid) or a warning.
+function gradeReasons(m) {
+  const tone = (good, bad) => good ? 'ok' : bad ? 'warn' : 'mid';
+  const out = [];
+  if (m.distorted) out.push(['warn', `Flagged: ${m.flags.join(', ')}`, 'numbers this extreme are unreliable, so BANDIT leaves it out of rankings']);
+  if (formed(m)) out.push([tone(m.band.percentile <= 35, m.band.percentile >= 75), whereLine(m), 'price today against its own history']);
+  else out.push(['mid', `Only ${m.band.days} days of price history`, 'BANDIT grades a YT once it has 14 days']);
+  if (m.range) {
+    const up = m.range.toHigh, down = m.range.toLow;
+    out.push([tone(up > 0.005 && up / Math.max(0.001, -down) >= 2, up <= 0.005), up > 0.005 ? `${upPct(up)} if it gets back to its high` : 'No room left to its high', `${upPct(down)} if it drops to its low`]);
+  }
+  out.push([tone(m.daysToMaturity >= 30, m.daysToMaturity < 14), `${m.daysToMaturity} days left`, `ends ${shortDate(m.expiry)}; a YT fades to zero by then`]);
+  out.push([tone(m.liquidityUsd >= 1e6, m.liquidityUsd < 25e4), `${usd(m.liquidityUsd)} pool`, m.liquidityUsd >= 1e6 ? 'easy to get in and out' : 'small pool, so bigger trades move the price']);
+  const pts = m.points || {};
+  out.push([pts.status === 'confirmed points' ? 'ok' : 'mid',
+    pts.status === 'confirmed points' ? `${pts.program || 'Points'}${pts.multiplier ? ` ${pts.multiplier}x` : ''} points` : pts.status === 'speculative airdrop' ? 'Possible airdrop, no published rate' : 'No points program',
+    pts.status === 'confirmed points' ? 'a bonus on top of any price move' : 'judged on price alone']);
+  if (m.change7d != null) {
+    const c = m.change7d;
+    out.push([c > 0.0005 ? 'ok' : c < -0.0005 ? 'warn' : 'mid', c > 0.0005 ? 'Price up this week' : c < -0.0005 ? 'Price down this week' : 'Flat this week', `yield rate ${c >= 0 ? '+' : ''}${(c * 100).toFixed(2)}% in 7 days`]);
+  }
+  return out;
+}
+
+const GRADE_FILTERS = [['all', 'Everything'], ['best', 'Best entries'], ['floor', 'Near their floor'], ['top', 'At their top'], ['new', 'Too new']];
+const gradeFilterFn = k => m => {
+  const gr = entryGrade(m);
+  return k === 'best' ? gr.g === 'A' || gr.g === 'B'
+    : k === 'floor' ? formed(m) && !m.distorted && m.band.percentile <= 20
+    : k === 'top' ? formed(m) && m.band.percentile >= 80
+    : k === 'new' ? gr.k === 'new'
+    : true;
+};
+const inChain = m => state.chain === 'all' || String(m.chainId) === state.chain;
+
 function renderChains() {
   const counts = {};
   state.data.markets.forEach(m => { counts[m.chainId] = (counts[m.chainId] || 0) + 1; });
-  $('#chainChips').innerHTML = state.data.chains.map(c => `<button class="chip${state.chain === String(c.id) ? ' on' : ''}" data-chain="${c.id}">${esc(c.name)}<span class="n">${counts[c.id] || 0}</span></button>`).join('') + `<button class="chip${state.chain === 'all' ? ' on' : ''}" data-chain="all">All chains</button>`;
+  $('#chainChips').innerHTML = `<button class="chip${state.chain === 'all' ? ' on' : ''}" data-chain="all">All chains<span class="n">${state.data.markets.length}</span></button>`
+    + state.data.chains.map(c => `<button class="chip${state.chain === String(c.id) ? ' on' : ''}" data-chain="${c.id}">${esc(c.name)}<span class="n">${counts[c.id] || 0}</span></button>`).join('');
+  const ms = state.data.markets.filter(inChain);
+  $('#gradeChips').innerHTML = GRADE_FILTERS.map(([k, t]) => `<button class="chip${state.gradeFilter === k ? ' on' : ''}" data-gfilter="${k}">${t}<span class="n">${ms.filter(gradeFilterFn(k)).length}</span></button>`).join('');
 }
 function rowHtml(m) {
-  const c = m.change7d, dir = c == null ? '' : c > 0.00005 ? 'up' : c < -0.00005 ? 'dn' : '';
-  const trend = c == null ? '<span class="tr">no 7d history</span>' : `<span class="tr ${dir}">${dir === 'up' ? '▴' : dir === 'dn' ? '▾' : '·'} ${Math.abs(c * 100).toFixed(2)}pp · 7d</span>`;
-  const p = m.points || {};
-  return `<div class="row" role="button" tabindex="0" data-ask="${esc(m.id)}" title="Ask BANDIT about YT-${esc(m.name)}">
-    <div class="asset"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="meta">${shortDate(m.expiry)} · ${m.daysToMaturity}d${m.distorted ? ' · <span style="color:var(--err)">distorted</span>' : ''}</div></div></div>
-    <span class="hide-m hide-l"><span class="badge chain c${m.chainId}">${esc(chainShort(m))}</span></span>
-    ${bandHtml(m)}
-    <div class="cell hide-m">${formed(m) ? `<span class="pct ${zone(m.band.percentile)}">P${Math.round(m.band.percentile)}</span>` : '<span class="pct forming">FORMING</span>'}<span class="lbl">${formed(m) ? zoneLabel(m.band.percentile) : `day ${m.band.days}`}</span></div>
-    <div class="cell hide-m hide-l">${m.range ? upPct(m.range.toHigh) : 'n/a'}<span class="lbl">${m.range ? `low ${upPct(m.range.toLow)}` : 'no range'}</span></div>
-    <div class="cell hide-m">${usd(m.liquidityUsd)}<span class="lbl">liquidity</span></div>
-    <div class="cell apy">${pct(m.impliedApy)}${trend}</div>
+  const gr = entryGrade(m), c = m.change7d, p = m.points || {};
+  const trend = c == null ? '<span class="tr">no 7-day history</span>' : `<span class="tr ${c > 0.00005 ? 'up' : c < -0.00005 ? 'dn' : ''}">${c > 0.00005 ? '▲' : c < -0.00005 ? '▼' : '·'} ${Math.abs(c * 100).toFixed(2)}% in 7d</span>`;
+  const ptag = p.status === 'confirmed points' ? `<span class="ptag">✦ ${esc(p.multiplier ? `${p.multiplier}x points` : 'points')}</span>` : p.status === 'speculative airdrop' ? '<span class="ptag spec">✦ airdrop?</span>' : '';
+  const room = m.range ? (m.range.toHigh > 0.005 ? `<b class="up">${upPct(m.range.toHigh)}</b>` : '<b class="flat">At high</b>') : '<b class="flat">n/a</b>';
+  const mRoom = m.range ? (m.range.toHigh > 0.005 ? `<b>${upPct(m.range.toHigh)}</b> to its high` : 'no room to its high') : 'no range yet';
+  return `<div class="mrow" data-id="${esc(m.id)}">
+    <div class="row" role="button" tabindex="0" aria-expanded="false" data-expand="${esc(m.id)}">
+      <div class="asset"><div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div><div style="min-width:0"><div class="nm">YT-${esc(m.name)}</div><div class="meta">${esc(chainShort(m))}<span class="m-only"> · ${m.daysToMaturity} days left</span>${ptag}</div></div></div>
+      <div class="c-grade">${gradeBadge(gr)}<span class="glabel">${esc(gr.label)}</span></div>
+      <div class="c-gauge">${bandHtml(m, { labels: false })}<span class="gline">${esc(whereLine(m))}</span></div>
+      <div class="cell hide-m">${room}<span class="lbl">${m.range ? `${upPct(m.range.toLow)} at its low` : 'no range yet'}</span></div>
+      <div class="cell hide-m hide-l">${m.daysToMaturity} days<span class="lbl">ends ${shortDate(m.expiry)}</span></div>
+      <div class="cell hide-m hide-l">${usd(m.liquidityUsd)}<span class="lbl">pool size</span></div>
+      <div class="cell apy hide-m">${pct(m.impliedApy)}${trend}</div>
+      <div class="m-stats"><b class="ml g-${gr.k}">${esc(gr.label)}</b> · ${mRoom} · ${usd(m.liquidityUsd)} pool</div>
+      <span class="chev" aria-hidden="true">›</span>
+    </div>
+    <div class="row-more"></div>
   </div>`;
+}
+function rowMoreHtml(m) {
+  const gr = entryGrade(m);
+  const head = gr.score >= 0 ? `Entry grade ${gr.g}: ${gr.label.toLowerCase()}` : gr.label;
+  const sub = gr.score >= 0 ? `Score ${gr.score} out of 100, from the numbers below. Data, not advice.` : m.distorted ? 'Left out of rankings until its numbers look normal.' : 'BANDIT grades a YT once it has 14 days of price history.';
+  return `<div class="why-head">${gradeBadge(gr, true)}<div><b>${esc(head)}</b><span>${esc(sub)}</span></div></div>
+    <div class="why-grid">${gradeReasons(m).map(([t, b, s]) => `<div class="why ${t}"><i>${t === 'ok' ? '✓' : t === 'warn' ? '!' : '•'}</i><div><b>${esc(b)}</b><span>${esc(s)}</span></div></div>`).join('')}</div>
+    <div class="more-acts">
+      <button class="btn primary sm" data-ask="${esc(m.id)}">Ask BANDIT about it</button>
+      ${m.distorted ? '' : state.watching.has(m.id) ? '<a class="btn sm watching" href="#/my">✓ Your agent is watching</a>' : `<button class="btn soft sm" data-watch="${esc(m.id)}">Watch it with my agent</button>`}
+      <button class="btn soft sm" data-alert="${esc(m.id)}">Alert me</button>
+      ${tradable(m) ? `<button class="btn soft sm" data-trade="${esc(m.id)}">Trade it</button>` : ''}
+      <a class="btn soft sm" href="${shareUrl(m)}" target="_blank" rel="noopener">Share</a>
+    </div>`;
+}
+function toggleRow(id, force) {
+  const wrap = $$('#boardRows .mrow').find(x => x.dataset.id === id); if (!wrap) return;
+  const open = force ?? !wrap.classList.contains('open');
+  wrap.classList.toggle('open', open);
+  $('.row', wrap).setAttribute('aria-expanded', String(open));
+  const m = state.byId.get(id);
+  $('.row-more', wrap).innerHTML = open && m ? rowMoreHtml(m) : '';
+  if (open) state.openRows.add(id); else state.openRows.delete(id);
 }
 function renderBoard() {
   const { key, dir } = state.sort;
-  const val = m => ({ name: m.name.toLowerCase(), liq: m.liquidityUsd, apy: m.impliedApy, pct: m.band.percentile, up: m.range ? m.range.toHigh : -Infinity })[key];
-  const ms = state.data.markets.filter(m => state.chain === 'all' || String(m.chainId) === state.chain).sort((a, b) => {
-    if (key === 'pct' && formed(a) !== formed(b)) return formed(a) ? -1 : 1;
+  const val = m => ({ name: m.name.toLowerCase(), grade: entryGrade(m).score, up: m.range ? m.range.toHigh : -Infinity, days: m.daysToMaturity, liq: m.liquidityUsd, apy: m.impliedApy })[key];
+  const ms = state.data.markets.filter(m => inChain(m) && gradeFilterFn(state.gradeFilter)(m)).sort((a, b) => {
     const va = val(a), vb = val(b);
     return ((va > vb) - (va < vb)) * dir || b.liquidityUsd - a.liquidityUsd;
   });
   $$('#boardHead [data-sort]').forEach(b => b.classList.toggle('sorted', b.dataset.sort === key));
   const rows = $('#boardRows');
   rows.classList.remove('ready');
-  rows.innerHTML = ms.length ? ms.map(rowHtml).join('') : '<div class="board-msg">No markets on this chain right now.</div>';
+  rows.innerHTML = ms.length ? ms.map(rowHtml).join('') : '<div class="board-msg">Nothing matches right now. Try another filter.</div>';
+  for (const id of state.openRows) toggleRow(id, true);
   readyUp(rows);
 }
 
@@ -495,8 +587,8 @@ function renderAgent() {
       ${setupDone ? '' : `<div class="card panel" style="margin-bottom:14px"><h3>Setup</h3><p class="sub">Add these in Vercel, then redeploy. BANDIT stays in dry run until you set AGENT_LIVE=true.</p><div class="checklist">${checks.map(([t, ok, how]) => `<div class="check ${ok ? 'ok' : ''}"><span class="tick">${ok ? '✓' : ''}</span><div>${t}<small>${esc(how)}</small></div></div>`).join('')}</div></div>`}
       <div class="card panel">
         <h3>Fund your agent</h3>
-        <p class="sub">Send a little ETH on Robinhood Chain to this address. The agent buys YT straight from ETH, so it needs nothing else.</p>
-        ${a.agent.address ? `<div class="fund"><div class="qr" id="qr"></div><div><div class="addr">${esc(a.agent.address)}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn soft xs" id="copyAddr">Copy</button><a class="btn soft xs" href="${esc(a.agent.addressUrl)}" target="_blank" rel="noopener">Explorer</a><button class="btn soft xs" id="addChain">Add Robinhood Chain</button></div></div></div>` : '<p class="help">No agent wallet yet. Set AGENT_PRIVATE_KEY in Vercel to a brand new wallet used only for BANDIT.</p>'}
+        <p class="sub">Send a little ETH on Robinhood Chain to this address, or top it up straight from Base, Arbitrum, Optimism or Ethereum. The agent buys YT straight from ETH, so it needs nothing else.</p>
+        ${a.agent.address ? `<div class="fund"><div class="qr" id="qr"></div><div><div class="addr">${esc(a.agent.address)}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary xs" data-topup="agent">Top up the agent</button><button class="btn soft xs" id="copyAddr">Copy</button><a class="btn soft xs" href="${esc(a.agent.addressUrl)}" target="_blank" rel="noopener">Explorer</a><button class="btn soft xs" id="addChain">Add Robinhood Chain</button></div></div></div>` : '<p class="help">No agent wallet yet. Set AGENT_PRIVATE_KEY in Vercel to a brand new wallet used only for BANDIT.</p>'}
       </div>
       <div class="card panel" style="margin-top:14px">
         <h3>Hard limits</h3>
@@ -802,7 +894,7 @@ function pickBodyHtml(p, m, j) {
 function heroPickHtml(p, j) {
   const m = p.market, v = verdictOf(m);
   return `<div class="pick-hero ${v.k}">
-    <div class="ph-top"><span class="rank">#1 pick</span>${m ? `<div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>` : ''}<div class="ph-name"><div class="nm">${esc(m ? `YT-${m.name}` : p.name)}</div><div class="sub">${m ? `${esc(m.chainName)} · ${usd(m.liquidityUsd)} liquidity` : ''}</div></div><span class="vpill ${v.k}">${v.t}</span></div>
+    <div class="ph-top"><span class="rank">#1 pick</span>${m ? `<div class="coin" style="${coinStyle(m.name)}">${esc(initials(m.name))}</div>` : ''}<div class="ph-name"><div class="nm">${esc(m ? `YT-${m.name}` : p.name)}</div><div class="sub">${m ? `${esc(m.chainName)} · ${usd(m.liquidityUsd)} liquidity` : ''}</div></div><span class="ph-tags">${m ? (gr => `<span class="gchip g-${gr.k}">${gr.score >= 0 ? `Grade ${gr.g}` : gr.g}</span>`)(entryGrade(m)) : ''}<span class="vpill ${v.k}">${v.t}</span></span></div>
     <p class="ph-line">${clean(p.one_liner)}</p>
     ${m ? gaugeHtml(m) + statsHtml(m) : ''}
     ${pickBodyHtml(p, m, j)}
@@ -1191,8 +1283,8 @@ function renderTrade() {
   fetchBalance(w.address).then(b => {
     const el = $('#walletBal'); if (!el) return;
     const dollars = b != null && state.data && state.data.ethUsd ? b * state.data.ethUsd : null;
-    el.textContent = b == null ? 'Balance unavailable' : `You have ${b.toFixed(5)} ETH on Robinhood Chain${dollars != null ? ` (${usd(dollars)})` : ''}`;
-    if (dollars != null && dollars < 5 && $('#lowBal')) $('#lowBal').innerHTML = `<div class="callout" style="margin-bottom:14px"><span class="ic">◆</span><div><b>Not enough on Robinhood Chain to trade yet.</b> Bridge a little ETH there first (Relay supports Robinhood Chain), or practice with $1,000 of paper money in your own agent.<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn soft xs" href="https://relay.link/bridge" target="_blank" rel="noopener">Bridge with Relay</a><a class="btn primary xs" href="#/my" data-close>Practice with my agent</a></div></div></div>`;
+    el.innerHTML = `${b == null ? 'Balance unavailable' : `You have ${b.toFixed(5)} ETH on Robinhood Chain${dollars != null ? ` (${usd(dollars)})` : ''}`} · <button class="linkish" data-topup="self" data-inline="1">Top up</button>`;
+    if (dollars != null && dollars < 5 && $('#lowBal') && !$('#lowBal .bridge')) $('#lowBal').innerHTML = `<div class="callout" style="margin-bottom:14px"><span class="ic">◆</span><div><b>Not enough on Robinhood Chain to trade yet.</b> Top up right here with one signature from Base, Arbitrum, Optimism or Ethereum, or practice with $1,000 of paper money in your own agent.<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn primary xs" data-topup="self" data-inline="1">Top up here</button><a class="btn soft xs" href="#/my" data-close>Practice with my agent</a></div></div></div>`;
   });
   if (t.review) renderReview();
 }
@@ -1209,6 +1301,7 @@ async function connectWallet(p) {
     toast(e.message || 'The wallet did not connect.', 'err');
   }
   if ($('#tradeSheet').classList.contains('on')) renderTrade();
+  if ($('#bridgeSheet').classList.contains('on')) renderBridge();
 }
 async function ensureChain(provider) {
   try {
@@ -1257,6 +1350,166 @@ async function signTrade() {
   } catch (e) {
     toast(e.message || 'The wallet did not send the transaction.', 'err');
     btn.disabled = false;
+  }
+}
+
+/* ---------- Top up Robinhood Chain (Relay bridge, inside the app) ---------- */
+// Quotes and status come straight from Relay's public API; the user signs the one deposit transaction in their
+// own wallet. BANDIT never touches the funds, and only sends the exact deposit it asked Relay for.
+const RELAY_API = 'https://api.relay.link';
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+const ETH_META = { name: 'Ether', symbol: 'ETH', decimals: 18 };
+const ORIGINS = [
+  { id: 8453, name: 'Base', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org', add: { chainId: '0x2105', chainName: 'Base', nativeCurrency: ETH_META, rpcUrls: ['https://mainnet.base.org'], blockExplorerUrls: ['https://basescan.org'] } },
+  { id: 42161, name: 'Arbitrum', rpc: 'https://arb1.arbitrum.io/rpc', explorer: 'https://arbiscan.io', add: { chainId: '0xa4b1', chainName: 'Arbitrum One', nativeCurrency: ETH_META, rpcUrls: ['https://arb1.arbitrum.io/rpc'], blockExplorerUrls: ['https://arbiscan.io'] } },
+  { id: 10, name: 'Optimism', rpc: 'https://mainnet.optimism.io', explorer: 'https://optimistic.etherscan.io', add: { chainId: '0xa', chainName: 'OP Mainnet', nativeCurrency: ETH_META, rpcUrls: ['https://mainnet.optimism.io'], blockExplorerUrls: ['https://optimistic.etherscan.io'] } },
+  { id: 1, name: 'Ethereum', rpc: 'https://ethereum-rpc.publicnode.com', explorer: 'https://etherscan.io', add: null },
+];
+const TOPUP_USD = [10, 25, 50, 100];
+state.bridge = { origin: 8453, picked: false, usd: 25, quote: null, balances: {}, balFor: null, target: 'self', host: '#bridgeBody', token: 0, busy: false };
+
+async function rpcBalance(rpc, address) {
+  try {
+    const r = await fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }) });
+    const j = await r.json();
+    return j.result ? parseInt(j.result, 16) / 1e18 : null;
+  } catch { return null; }
+}
+const bridgeRecipient = () => state.bridge.target === 'agent' ? state.agent && state.agent.agent.address : state.wallet.address;
+
+// target 'self' tops up the connected wallet; 'agent' funds the BANDIT agent wallet. inline mounts it in the trade sheet.
+function openTopUp(target = 'self', inline = false) {
+  const b = state.bridge;
+  Object.assign(b, { target, quote: null, busy: false, host: inline ? '#lowBal' : '#bridgeBody' });
+  if (!inline) openLayer('#bridgeSheet');
+  renderBridge();
+}
+function renderBridge() {
+  const b = state.bridge, host = $(b.host), w = state.wallet;
+  if (!host) return;
+  const head = b.host === '#bridgeBody' ? '' : '<div class="br-head"><div><b>Top up Robinhood Chain</b><span>Move ETH from another chain with one signature.</span></div><span class="br-by">via Relay</span></div>';
+  if (!w.address) {
+    const list = walletOptions();
+    state.walletList = list;
+    host.innerHTML = `<div class="bridge">${head}<p class="help" style="font-size:13px;color:var(--text-2)">Connect the wallet that holds your ETH on Base, Arbitrum, Optimism or Ethereum.</p>
+      ${list.length ? `<div class="wallets">${list.map((p, i) => `<button class="wallet-btn" data-wallet="${i}">${walletIcon(p)}Connect ${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout" style="margin:0"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask, then reload.</div></div>'}</div>`;
+    return;
+  }
+  const to = bridgeRecipient();
+  host.innerHTML = `<div class="bridge">${head}
+    <div class="fld"><span class="fl">From</span><div class="pills br-origins">${ORIGINS.map(o => `<button type="button" data-borigin="${o.id}" class="${b.origin === o.id ? 'on' : ''}">${o.name}<small data-bbal="${o.id}">${b.balFor === w.address && b.balances[o.id] != null ? `${b.balances[o.id].toFixed(4)} ETH` : '…'}</small></button>`).join('')}</div></div>
+    <div class="fld"><span class="fl">How much</span><div class="pills">${TOPUP_USD.map(u => `<button type="button" data-busd="${u}" class="${b.usd === u ? 'on' : ''}">$${u}</button>`).join('')}</div></div>
+    <div class="br-to">Lands in <b>${b.target === 'agent' ? 'the BANDIT agent wallet' : 'your wallet'}</b> on Robinhood Chain <span class="mono">${esc(shortAddr(to))}</span></div>
+    <div class="br-quote" id="brQuote"><span class="faint">Getting a live quote from Relay…</span></div>
+    <button class="btn primary" id="brGo" disabled>Getting a quote…</button>
+    <div class="br-status" id="brStatus"></div>
+    <p class="help">BANDIT never holds your funds. You sign one transfer in your wallet and Relay delivers the ETH, usually within seconds.</p>
+  </div>`;
+  loadBridgeBalances();
+  quoteBridge();
+}
+async function loadBridgeBalances() {
+  const b = state.bridge, addr = state.wallet.address;
+  if (!addr || b.balFor === addr) return;
+  b.balFor = addr;
+  await Promise.all(ORIGINS.map(async o => {
+    b.balances[o.id] = await rpcBalance(o.rpc, addr);
+    const el = $(`[data-bbal="${o.id}"]`);
+    if (el) el.textContent = b.balances[o.id] == null ? 'n/a' : `${b.balances[o.id].toFixed(4)} ETH`;
+  }));
+  // Start from the chain with the most ETH, unless the user already picked one.
+  const best = ORIGINS.filter(o => b.balances[o.id] > 0).sort((x, y) => b.balances[y.id] - b.balances[x.id])[0];
+  if (!b.picked && best && best.id !== b.origin) { b.origin = best.id; $$('[data-borigin]').forEach(x => x.classList.toggle('on', Number(x.dataset.borigin) === b.origin)); quoteBridge(); }
+  else quoteBridge();
+}
+let bridgeTimer = null;
+function quoteBridge() {
+  clearTimeout(bridgeTimer);
+  bridgeTimer = setTimeout(async () => {
+    const b = state.bridge, w = state.wallet, out = $('#brQuote'), go = $('#brGo');
+    if (!w.address || !out) return;
+    const token = ++b.token;
+    const origin = ORIGINS.find(o => o.id === b.origin);
+    const ethUsd = state.data && state.data.ethUsd;
+    if (!ethUsd) { out.innerHTML = '<span class="faint">Waiting for the live ETH price…</span>'; return; }
+    const wei = BigInt(Math.round((b.usd / ethUsd) * 1e6)) * 10n ** 12n;
+    go.disabled = true; go.textContent = 'Getting a quote…';
+    try {
+      const r = await fetch(`${RELAY_API}/quote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: w.address, recipient: bridgeRecipient(), originChainId: origin.id, destinationChainId: RH, originCurrency: ZERO_ADDR, destinationCurrency: ZERO_ADDR, amount: wei.toString(), tradeType: 'EXACT_INPUT' }) });
+      const q = await r.json();
+      if (token !== b.token) return;
+      if (!r.ok || !Array.isArray(q.steps)) throw new Error(q.message || `Relay answered HTTP ${r.status}`);
+      b.quote = { ...q, wei, origin: origin.id };
+      const d = q.details || {}, got = d.currencyOut || {};
+      const fees = Number((q.fees && q.fees.gas && q.fees.gas.amountUsd) || 0) + Number((q.fees && q.fees.relayer && q.fees.relayer.amountUsd) || 0);
+      const have = b.balFor === w.address ? b.balances[origin.id] : null;
+      const short = have != null && have < Number(wei) / 1e18;
+      out.innerHTML = `You send <b>${(Number(wei) / 1e18).toFixed(5)} ETH</b> on ${origin.name} and get about <b>${Number(got.amountFormatted || 0).toFixed(5)} ETH</b>${got.amountUsd ? ` (${usd(Number(got.amountUsd))})` : ''} on Robinhood Chain. Fees about ${fees ? usd(fees) : 'n/a'}${d.timeEstimate != null ? `, arrives in about ${Math.max(5, Math.round(d.timeEstimate))} seconds` : ''}.${short ? `<div class="warn">You have ${have.toFixed(5)} ETH on ${origin.name}, which is not enough. Pick another chain or a smaller amount.</div>` : ''}`;
+      go.disabled = short;
+      go.innerHTML = `Top up $${b.usd} from ${origin.name} <span class="arr">→</span>`;
+    } catch (e) {
+      if (token !== b.token) return;
+      b.quote = null;
+      out.innerHTML = `<span class="warn">Relay could not quote this right now: ${esc(e.message)}</span>`;
+      go.disabled = true; go.textContent = 'No quote';
+    }
+  }, 300);
+}
+function bridgeStatus(kind, text, link) {
+  const el = $('#brStatus'); if (!el) return;
+  el.className = `br-status ${kind}`;
+  el.innerHTML = `${kind === 'ok' ? '✓ ' : kind === 'bad' ? '! ' : ''}${esc(text)}${kind === 'wait' ? '<span class="thinking-dots"><i></i><i></i><i></i></span>' : ''}${link ? ` <a href="${esc(link)}" target="_blank" rel="noopener">View</a>` : ''}`;
+}
+async function switchChainTo(provider, o) {
+  try {
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: `0x${o.id.toString(16)}` }] });
+  } catch (e) {
+    if (o.add && (e.code === 4902 || /unrecognized|unknown|not added|not been added/i.test(e.message || ''))) await provider.request({ method: 'wallet_addEthereumChain', params: [o.add] });
+    else throw e;
+  }
+}
+async function pollRelay(endpoint) {
+  for (let i = 0; i < 100; i++) {
+    await sleep(2500);
+    let j = null;
+    try { j = await fetch(RELAY_API + endpoint).then(r => r.json()); } catch { continue; }
+    if (j.status === 'success') return j;
+    if (j.status === 'refund') throw new Error('Relay could not deliver it and refunded the ETH to your wallet.');
+    if (j.status === 'failure') throw new Error('Relay could not complete the transfer.');
+  }
+  throw new Error('Still on its way. Check your wallet on Robinhood Chain in a minute.');
+}
+async function runBridge() {
+  const b = state.bridge, w = state.wallet, q = b.quote;
+  if (!q || b.busy || !w.provider) return;
+  const origin = ORIGINS.find(o => o.id === q.origin);
+  const txSteps = q.steps.filter(s => s.kind === 'transaction');
+  const it = txSteps.length === 1 && q.steps.length === 1 ? txSteps[0].items[0] : null;
+  // Only the plain deposit we asked for: from this wallet, on this chain, for exactly this amount.
+  if (!it || !it.data || Number(it.data.chainId) !== origin.id || String(it.data.from).toLowerCase() !== w.address.toLowerCase() || BigInt(it.data.value || 0) !== q.wei) {
+    bridgeStatus('bad', 'That quote did not match what you asked for, so BANDIT stopped before anything was sent. Try again.');
+    return;
+  }
+  b.busy = true;
+  const go = $('#brGo'); if (go) go.disabled = true;
+  try {
+    bridgeStatus('wait', `Switch your wallet to ${origin.name}`);
+    await switchChainTo(w.provider, origin);
+    bridgeStatus('wait', 'Confirm the transfer in your wallet');
+    const hash = await w.provider.request({ method: 'eth_sendTransaction', params: [{ from: w.address, to: it.data.to, data: it.data.data, value: `0x${BigInt(it.data.value).toString(16)}` }] });
+    bridgeStatus('wait', `Sent on ${origin.name}. Relay is delivering it to Robinhood Chain`, `${origin.explorer}/tx/${hash}`);
+    const done = it.check && it.check.endpoint ? await pollRelay(it.check.endpoint) : null;
+    const dest = done && done.txHashes && done.txHashes[0];
+    bridgeStatus('ok', 'Arrived on Robinhood Chain.', dest ? `${WALLET_CHAIN.blockExplorerUrls[0]}/tx/${dest}` : null);
+    toast('Your ETH arrived on Robinhood Chain.', 'ok');
+    b.balFor = null;
+    if (b.target === 'agent') { state.agentSig = ''; loadAgent(); }
+    if (b.host === '#lowBal') setTimeout(() => { if ($('#tradeSheet').classList.contains('on')) renderTrade(); }, 2500);
+  } catch (e) {
+    bridgeStatus('bad', e.message || 'The wallet did not send it.');
+  } finally {
+    b.busy = false;
+    if ($('#brGo')) $('#brGo').disabled = false;
   }
 }
 
@@ -1505,6 +1758,7 @@ function renderMy() {
     <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
       <button class="btn primary" id="myRun">Wake my agent <span class="arr">→</span></button>
       ${st.telegram.linked ? '' : `<button class="btn tg sm" id="myTg" ${st.telegram.bot ? '' : 'disabled'}>Connect Telegram</button>`}
+      <button class="btn soft sm" data-topup="self">Top up for real trades</button>
       <button class="btn soft xs" id="mySignOut">Disconnect</button>
     </div>
   </div>
@@ -1620,9 +1874,15 @@ document.addEventListener('click', e => {
   if ((el = q('[data-ask]'))) return openAsk(el.dataset.ask, { auto: !el.classList.contains('row') });
   if ((el = q('[data-alert]'))) return openAlert(el.dataset.alert);
   if ((el = q('[data-trade]'))) return openTrade(el.dataset.trade);
+  if ((el = q('[data-expand]'))) return toggleRow(el.dataset.expand);
+  if ((el = q('[data-gfilter]'))) { state.gradeFilter = el.dataset.gfilter; renderChains(); renderBoard(); return; }
+  if ((el = q('[data-topup]'))) return openTopUp(el.dataset.topup, Boolean(el.dataset.inline));
+  if ((el = q('[data-borigin]'))) { state.bridge.origin = Number(el.dataset.borigin); state.bridge.picked = true; $$('[data-borigin]').forEach(x => x.classList.toggle('on', x === el)); return quoteBridge(); }
+  if ((el = q('[data-busd]'))) { state.bridge.usd = Number(el.dataset.busd); $$('[data-busd]').forEach(x => x.classList.toggle('on', x === el)); return quoteBridge(); }
+  if (q('#brGo')) return runBridge();
   if ((el = q('[data-chain]'))) { state.chain = el.dataset.chain; renderChains(); renderBoard(); return; }
   if ((el = q('[data-farmchain]'))) { state.farmChain = el.dataset.farmchain; $$('#farmFilters .chip').forEach(c => c.classList.toggle('on', c === el)); renderFarm(); return; }
-  if ((el = q('#boardHead [data-sort]'))) { const k = el.dataset.sort; state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: ['name', 'pct'].includes(k) ? 1 : -1 }; renderBoard(); return; }
+  if ((el = q('#boardHead [data-sort]'))) { const k = el.dataset.sort; state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: k === 'name' ? 1 : -1 }; renderBoard(); return; }
   if ((el = q('[data-toggle]'))) return ownerAction({ action: 'toggle-rule', id: el.dataset.toggle });
   if ((el = q('[data-del]'))) return ownerAction({ action: 'delete-rule', id: el.dataset.del });
   if ((el = q('[data-wallet]'))) return connectWallet(state.walletList[Number(el.dataset.wallet)]);
@@ -1645,7 +1905,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeAll(); closeMenu(); }
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row[data-ask]')) { e.preventDefault(); openAsk(e.target.dataset.ask); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row[data-expand]')) { e.preventDefault(); toggleRow(e.target.dataset.expand); }
   if (e.key === 'Enter' && e.target.id === 'ownerKey') saveOwner();
 });
 
