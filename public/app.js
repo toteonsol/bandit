@@ -82,8 +82,8 @@ function bandHtml(m, { labels = true } = {}) {
   return `<div class="band"><div class="track"><span class="tick f"></span><span class="tick c"></span>${tl}<span class="now ${zone(b.percentile)}" style="--x:${x}%" title="P${Math.round(b.percentile)} of its band"></span></div></div>`;
 }
 const pctLabel = m => formed(m)
-  ? `<span class="pct ${zone(m.band.percentile)}">P${Math.round(m.band.percentile)}</span> <span class="faint">${zoneLabel(m.band.percentile)} of its ${m.band.days < 90 ? `${m.band.days}-day` : '90-day'} band</span>`
-  : `<span class="pct forming">${m.band.status === 'forming' ? `Band forming, day ${m.band.days} of 14` : 'No band history'}</span>`;
+  ? `<span class="pct ${zone(m.band.percentile)}">P${Math.round(m.band.percentile)}</span> <span class="faint">${esc(plainBand(m))}</span>`
+  : `<span class="pct forming">${esc(plainBand(m))}</span>`;
 const readyUp = el => el && requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('ready')));
 
 /* ---------- farm view ---------- */
@@ -225,6 +225,7 @@ async function loadMarkets() {
     $('#liveText').textContent = `LIVE · PENDLE · ${d.chains.length} CHAINS · ${d.markets.length} MARKETS`;
     $('#srcLine').textContent = `Pendle hosted API. Robinhood Chain markets above ${usd(d.chains[0].minLiquidityUsd)}, other chains above ${usd(d.minLiquidityUsd)}. Updated ${new Date(d.updatedAt).toISOString().slice(11, 16)} UTC.`;
     renderFarm(); renderChains(); renderBoard(); fillMarketSelects();
+    if (state.route === 'my' && state.me && !state.live.playing && !($('#myRuleForm') && $('#myRuleForm').contains(document.activeElement))) { state.meSig = ''; renderMy(); }
   } catch (e) {
     if (state.data) return;
     $('#liveText').textContent = 'PENDLE DATA UNAVAILABLE';
@@ -690,23 +691,65 @@ async function ask(e) {
   }
 }
 
-/* ---------- Trade with BANDIT (user's own wallet) ---------- */
+/* ---------- wallet + Trade with BANDIT (user's own wallet) ---------- */
+// Wallets announce themselves (EIP-6963). If this browser used one before, reconnect silently (no popup).
 window.addEventListener('eip6963:announceProvider', e => {
   const { info, provider } = e.detail || {};
   if (!info || !provider || state.providers.some(p => p.info.uuid === info.uuid)) return;
   state.providers.push({ info, provider });
-  if ($('#tradeSheet').classList.contains('on') && !state.wallet.address) renderTrade();
+  if (!state.wallet.address && info.rdns && info.rdns === store.get('bandit.wallet')) {
+    provider.request({ method: 'eth_accounts' }).then(acc => { if (acc && acc[0] && !state.wallet.address) { setWallet({ info, provider }, acc[0]); } }).catch(() => {});
+  }
+  if (!state.wallet.address && $('#tradeSheet').classList.contains('on')) renderTrade();
+  if ($('#welcomeModal') && $('#welcomeModal').classList.contains('on')) renderWelcome();
+  if (state.route === 'my' && !state.me) renderMy();
 });
 window.dispatchEvent(new Event('eip6963:requestProvider'));
 
-const tradeMarkets = () => (state.data ? state.data.markets : []).filter(tradable);
+const walletOptions = () => state.providers.length ? state.providers : (window.ethereum ? [{ info: { uuid: 'injected', name: 'Browser wallet', icon: '' }, provider: window.ethereum }] : []);
+const walletIcon = p => p.info.icon ? `<img src="${esc(p.info.icon)}" alt="">` : '<span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim);color:var(--lime)">◆</span>';
+
+function setWallet(p, address) {
+  state.wallet = { provider: p.provider, info: p.info, address, connecting: null };
+  if (p.info.rdns) store.set('bandit.wallet', p.info.rdns);
+  if (p.provider.on && !p.provider.__banditBound) {
+    p.provider.__banditBound = true;
+    p.provider.on('accountsChanged', acc => { state.wallet.address = acc[0] || null; state.trade.review = null; updateWalletBtn(); if ($('#tradeSheet').classList.contains('on')) renderTrade(); });
+  }
+  updateWalletBtn();
+}
+
+// Plain-language read of where a YT sits, for people who have never seen a band.
+function plainBand(m) {
+  if (!formed(m)) return m.band.status === 'forming' ? `Too new to judge: ${m.band.days} of the 14 days of price history BANDIT needs.` : 'No price history yet.';
+  const p = Math.round(m.band.percentile), d = Math.min(90, m.band.days);
+  if (p >= 97) return `At its ${d}-day high: pricier than it has been all period.`;
+  if (p >= 80) return `Pricey: higher than ${p}% of its last ${d} days.`;
+  if (p <= 20) return `Cheap: lower than ${100 - p}% of its last ${d} days.`;
+  return `In the middle of its ${d}-day range.`;
+}
+function ytStory(m) {
+  const end = shortDate(m.expiry);
+  let s = `YT-${esc(m.name)} collects the yield of ${esc(m.name)} until ${end} (${m.daysToMaturity} days). Its price rises when the market expects more yield, and fades as the end date gets closer. `;
+  s += `<b style="color:var(--text)">${esc(plainBand(m))}</b>`;
+  if (m.range) s += m.range.toHigh > 0.005 ? ` Back at its ${Math.min(90, m.band.days)}-day high it would be worth ${upPct(m.range.toHigh)}; back at its low, ${upPct(m.range.toLow)}.` : ` Back at its low it would be worth ${upPct(m.range.toLow)}.`;
+  return s;
+}
+
+const tradeMarkets = () => (state.data ? state.data.markets : []).filter(tradable)
+  .sort((a, b) => formed(b) - formed(a) || ((b.range && b.range.ratio) || 0) - ((a.range && a.range.ratio) || 0) || b.liquidityUsd - a.liquidityUsd);
 function openTrade(marketId) {
   if (marketId) state.trade.marketId = marketId;
   state.trade.review = null;
   renderTrade();
   openLayer('#tradeSheet');
 }
-function updateWalletBtn() { $('#walletBtn').textContent = state.wallet.address ? shortAddr(state.wallet.address) : 'Connect wallet'; }
+function updateWalletBtn() {
+  const b = $('#walletBtn');
+  b.textContent = state.me ? `My agent · ${shortAddr(state.me.address)}` : state.wallet.address ? `Get my agent · ${shortAddr(state.wallet.address)}` : 'Get my agent';
+  b.classList.toggle('primary', !state.me);
+  b.classList.toggle('ghost', Boolean(state.me));
+}
 async function fetchBalance(address) {
   try {
     const r = await fetch(WALLET_CHAIN.rpcUrls[0], { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }) });
@@ -716,41 +759,53 @@ async function fetchBalance(address) {
 }
 function renderTrade() {
   const t = state.trade, w = state.wallet, body = $('#tradeBody');
+  if (w.connecting) {
+    body.innerHTML = `<div class="thinking"><img src="/art/mascot.svg" alt=""><div><b>Waiting for ${esc(w.connecting)}</b><span>Approve the connection in your wallet window.</span></div></div>`;
+    return;
+  }
   if (!w.address) {
-    const list = state.providers.length ? state.providers : (window.ethereum ? [{ info: { uuid: 'injected', name: 'Browser wallet', icon: '' }, provider: window.ethereum }] : []);
+    const list = walletOptions();
     state.walletList = list;
-    body.innerHTML = `<p class="help" style="margin-bottom:14px">Connect Rabby, MetaMask or any browser wallet. BANDIT builds the Pendle trade, SERV Reasoning reviews it, and you sign it yourself on Robinhood Chain. BANDIT never holds your funds.</p>
-      ${list.length ? `<div class="wallets">${list.map((p, i) => `<button class="wallet-btn" data-wallet="${i}">${p.info.icon ? `<img src="${esc(p.info.icon)}" alt="">` : '<span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim);color:var(--lime)">◆</span>'}${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask, then reload. You can still browse, Ask BANDIT, and set Telegram alerts without a wallet.</div></div>'}`;
+    body.innerHTML = `<p class="help" style="margin-bottom:14px;font-size:13.5px;color:var(--text-2)">Trade a YT yourself, from your own wallet. BANDIT prepares the trade, SERV Reasoning checks it and tells you why, and you sign. BANDIT never holds your money.</p>
+      ${list.length ? `<div class="wallets">${list.map((p, i) => `<button class="wallet-btn" data-wallet="${i}">${walletIcon(p)}Continue with ${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask, then reload. You can still browse, ask BANDIT, and get Telegram alerts without one.</div></div>'}`;
     return;
   }
   const ms = tradeMarkets();
   if (!t.marketId || !ms.some(m => m.id === t.marketId)) t.marketId = ms[0] && ms[0].id;
   const m = state.byId.get(t.marketId);
-  let html = `<div class="check ok" style="margin-bottom:16px"><span class="tick">✓</span><div>${esc((w.info && w.info.name) || 'Wallet')} · ${esc(shortAddr(w.address))}<small id="walletBal">Checking your balance on Robinhood Chain…</small></div><button class="btn soft xs" id="walletOff" style="margin-left:auto">Disconnect</button></div>`;
-  if (!ms.length) { body.innerHTML = html + '<div class="callout"><span class="ic">!</span><div>No Robinhood Chain market passes the outlier guard right now.</div></div>'; return; }
+  let html = `<div class="check ok" style="margin-bottom:14px"><span class="tick">✓</span><div>${esc((w.info && w.info.name) || 'Wallet')} · ${esc(shortAddr(w.address))}<small id="walletBal">Checking your balance on Robinhood Chain…</small></div><button class="btn soft xs" id="walletOff" style="margin-left:auto">Disconnect</button></div>
+    <div id="lowBal"></div>`;
+  if (!ms.length) { body.innerHTML = html + '<div class="callout"><span class="ic">!</span><div>No Robinhood Chain YT is tradable right now. Every one is either too thin or too close to its end date.</div></div>'; return; }
   html += `<div class="form">
-    <label class="fld"><span class="fl">Market</span><select class="inp" id="tMarket">${ms.map(x => `<option value="${esc(x.id)}" ${x.id === t.marketId ? 'selected' : ''}>YT-${esc(x.name)} · ${x.daysToMaturity}d left · ${formed(x) ? `P${Math.round(x.band.percentile)}, ${x.range ? upPct(x.range.toHigh) + ' to high' : ''}` : 'band forming'}</option>`).join('')}</select></label>
-    ${m ? `<div class="card" style="padding:14px">${bandHtml(m)}<div style="margin-top:8px;font-size:12px">${pctLabel(m)}</div>${m.points && m.points.note ? `<p class="help" style="margin-top:8px">${clean(m.points.note)}</p>` : ''}</div>` : ''}
-    <div class="row2"><label class="fld"><span class="fl">Size</span><span class="money"><input class="inp" id="tSize" inputmode="decimal" value="${esc(t.size || 10)}"></span></label>
-    <label class="fld"><span class="fl">Max slippage</span><select class="inp" id="tSlip"><option value="0.005">0.5%</option><option value="0.01" selected>1%</option><option value="0.02">2%</option><option value="0.03">3%</option></select></label></div>
-    <div><button class="btn primary" id="tReview">Review with SERV <span class="arr">→</span></button></div>
+    <label class="fld"><span class="fl">What do you want to buy?</span><select class="inp" id="tMarket">${ms.map(x => `<option value="${esc(x.id)}" ${x.id === t.marketId ? 'selected' : ''}>YT-${esc(x.name)} · ${esc(formed(x) ? (x.band.percentile >= 97 ? 'at its high' : x.band.percentile >= 80 ? 'pricey' : x.band.percentile <= 20 ? 'cheap' : 'mid range') : 'too new to judge')} · ${x.daysToMaturity} days left</option>`).join('')}</select></label>
+    ${m ? `<div class="card" style="padding:14px">${bandHtml(m)}<p class="help" style="margin-top:10px;font-size:13px;color:var(--text-2);line-height:1.55">${ytStory(m)}</p></div>` : ''}
+    <label class="fld"><span class="fl">How much?</span><span class="money"><input class="inp" id="tSize" inputmode="decimal" value="${esc(t.size || 10)}"></span></label>
+    <details class="adv"><summary>Advanced</summary><label class="fld" style="margin-top:10px"><span class="fl">Max slippage <em>how far the price may move before the trade cancels itself</em></span><select class="inp" id="tSlip"><option value="0.005">0.5%</option><option value="0.01" selected>1%</option><option value="0.02">2%</option><option value="0.03">3%</option></select></label></details>
+    <div><button class="btn primary" id="tReview">Ask SERV to check this trade <span class="arr">→</span></button></div>
   </div><div id="tResult" style="margin-top:18px"></div>`;
   body.innerHTML = html;
   readyUp(body);
-  fetchBalance(w.address).then(b => { const el = $('#walletBal'); if (el) el.textContent = b == null ? 'Balance unavailable' : `${b.toFixed(5)} ETH on Robinhood Chain${state.data && state.data.ethUsd ? ` · ${usd(b * state.data.ethUsd)}` : ''}`; });
+  fetchBalance(w.address).then(b => {
+    const el = $('#walletBal'); if (!el) return;
+    const dollars = b != null && state.data && state.data.ethUsd ? b * state.data.ethUsd : null;
+    el.textContent = b == null ? 'Balance unavailable' : `You have ${b.toFixed(5)} ETH on Robinhood Chain${dollars != null ? ` (${usd(dollars)})` : ''}`;
+    if (dollars != null && dollars < 5 && $('#lowBal')) $('#lowBal').innerHTML = `<div class="callout" style="margin-bottom:14px"><span class="ic">◆</span><div><b>Not enough on Robinhood Chain to trade yet.</b> Bridge a little ETH there first (Relay supports Robinhood Chain), or practice with $1,000 of paper money in your own agent.<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn soft xs" href="https://relay.link/bridge" target="_blank" rel="noopener">Bridge with Relay</a><a class="btn primary xs" href="#/my" data-close>Practice with my agent</a></div></div></div>`;
+  });
   if (t.review) renderReview();
 }
 async function connectWallet(p) {
   if (!p) return;
+  state.wallet.connecting = p.info.name;
+  if ($('#tradeSheet').classList.contains('on')) renderTrade();
   try {
     const accounts = await p.provider.request({ method: 'eth_requestAccounts' });
-    state.wallet = { provider: p.provider, info: p.info, address: accounts[0] };
-    if (p.provider.on) p.provider.on('accountsChanged', acc => { state.wallet.address = acc[0] || null; state.trade.review = null; updateWalletBtn(); renderTrade(); });
-    updateWalletBtn();
-    renderTrade();
+    setWallet(p, accounts[0]);
+    toast(`Connected ${p.info.name}.`, 'ok');
   } catch (e) {
+    state.wallet.connecting = null;
     toast(e.message || 'The wallet did not connect.', 'err');
   }
+  if ($('#tradeSheet').classList.contains('on')) renderTrade();
 }
 async function ensureChain(provider) {
   try {
@@ -872,22 +927,69 @@ async function meApi(action, extra = {}) {
 const toHexUtf8 = str => '0x' + [...new TextEncoder().encode(str)].map(b => b.toString(16).padStart(2, '0')).join('');
 
 async function signInWith(p) {
+  if (!p) return;
   try {
-    if (!state.wallet.address || state.wallet.provider !== p.provider) await connectWallet(p);
+    if (!state.wallet.address || state.wallet.provider !== p.provider) {
+      toast(`Approve the connection in ${p.info.name}.`);
+      await connectWallet(p);
+    }
     const address = state.wallet.address;
     if (!address) return;
     const { nonce, message } = await meApi('nonce', { address });
-    toast('Sign the message in your wallet. It is free and moves no funds.');
+    toast(`Now sign the message in ${p.info.name}. It is free and moves no funds.`);
     const signature = await state.wallet.provider.request({ method: 'personal_sign', params: [toHexUtf8(message), address] });
     const session = await meApi('verify', { address, nonce, signature });
     state.me = session;
     store.set('bandit.me', JSON.stringify(session));
-    toast('Your agent is ready with $1,000 of paper money.', 'ok');
+    updateWalletBtn();
+    closeAll();
+    toast('Your agent is ready with $1,000 of practice money.', 'ok');
     state.meSig = '';
-    await loadMe();
+    if (state.route !== 'my') location.hash = '#/my'; else await loadMe();
   } catch (e) {
     toast(e.message || 'Sign-in was cancelled.', 'err');
   }
+}
+
+/* ---------- welcome (first-time onboarding) ---------- */
+const ONBOARD = [
+  { img: '/art/step-price.svg', title: 'Some YTs are cheap. Some are at their top.', text: "A YT's price rises and falls with the yield it collects. BANDIT compares today's price with the last 90 days, so you can see at a glance whether it's cheap or already at its peak, and how far it could move." },
+  { img: '/art/step-rule.svg', title: 'Tell your agent what you want.', text: 'Pick a YT and a simple rule, like "buy $100 when it gets cheap". Your agent watches it every 10 minutes, day and night, so you don\'t have to.' },
+  { img: '/art/step-sleep.svg', title: 'It double-checks every move.', text: 'Before your agent acts, SERV Reasoning checks the numbers and tells you why in plain words. You start with $1,000 of practice money, so nothing is at risk while you learn.' },
+];
+state.welcome = 0;
+function renderWelcome() {
+  const i = state.welcome, step = ONBOARD[i], last = i === ONBOARD.length - 1;
+  const list = walletOptions();
+  state.walletList = list;
+  const cta = !last ? '' : state.me ? '<a class="btn primary" href="#/my" data-close>Open my agent</a>'
+    : list.length ? `<div class="wallets" style="margin-top:4px">${list.map((p, j) => `<button class="wallet-btn" data-mywallet="${j}">${walletIcon(p)}Create my free agent with ${esc(p.info.name)}</button>`).join('')}</div><p class="help" style="margin-top:8px">Free: you sign a message. No gas, no funds, no approvals.</p>`
+    : '<div class="callout"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask to create your agent. Everything else on BANDIT works without one.</div></div>';
+  $('#welcomeBody').innerHTML = `
+    <div class="ob-art"><img src="${step.img}" alt=""></div>
+    <div class="ob-dots">${ONBOARD.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div>
+    <h3 id="welcomeTitle">${esc(step.title)}</h3>
+    <p class="sub">${esc(step.text)}</p>
+    ${cta}
+    <div class="acts">${i > 0 ? '<button class="btn soft sm" id="obBack">Back</button>' : '<button class="btn soft sm" data-close>Just look around</button>'}${!last ? '<button class="btn primary sm" id="obNext">Next <span class="arr">→</span></button>' : ''}</div>`;
+}
+function openWelcome() { state.welcome = 0; renderWelcome(); openLayer('#welcomeModal'); }
+
+function firstMovePick() {
+  return (state.data ? state.data.markets : [])
+    .filter(m => !m.distorted && formed(m) && m.range && m.range.toHigh > 0.005 && m.ytPriceUsd > 0 && m.daysToMaturity >= 14)
+    .sort((a, b) => ((b.range.ratio || 0) - (a.range.ratio || 0)))[0] || null;
+}
+async function quickFirstRule(id) {
+  const m = state.byId.get(id); if (!m) return;
+  const pct = Math.min(60, Math.max(25, Math.ceil(m.band.percentile) + 10));
+  try {
+    await meApi('create-rule', { marketId: m.id, dir: 'below', pct, ruleAction: 'enter', sizeUsd: 100, mode: 'paper' });
+    toast(`Rule armed. Waking your agent so you can watch it work.`, 'ok');
+    state.meSig = '';
+    await loadMe();
+    setTimeout(() => { $('.live-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); runMine(); }, 400);
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 async function loadMe() {
@@ -916,22 +1018,34 @@ async function loadMe() {
 function myRuleBuilderHtml() {
   const ms = (state.data ? state.data.markets : []).filter(m => !m.distorted && formed(m))
     .sort((a, b) => ((b.range && b.range.ratio) || 0) - ((a.range && a.range.ratio) || 0));
-  const opt = m => `<option value="${esc(m.id)}" data-rh="${m.chainId === RH ? 1 : 0}">YT-${esc(m.name)} · ${esc(m.chainName)} · P${Math.round(m.band.percentile)}${m.range ? ` · ${upPct(m.range.toHigh)} to high` : ''}</option>`;
-  return `<div class="card" style="margin-top:14px;padding:16px;background:var(--bg-2)"><div class="form" id="myRuleForm">
-    <label class="fld"><span class="fl">Market</span><select class="inp" id="mMarket">${ms.map(opt).join('')}</select></label>
+  const tag = m => m.band.percentile >= 97 ? 'at its high' : m.band.percentile >= 80 ? 'pricey' : m.band.percentile <= 20 ? 'cheap' : 'mid range';
+  const opt = m => `<option value="${esc(m.id)}">YT-${esc(m.name)} · ${esc(m.chainName)} · ${tag(m)}${m.range && m.range.toHigh > 0.005 ? ` · ${upPct(m.range.toHigh)} to its high` : ''}</option>`;
+  return `<div class="card" id="myBuilder" style="margin-top:14px;padding:16px;background:var(--bg-2)"><div class="form" id="myRuleForm">
+    <label class="fld"><span class="fl">Which YT should your agent watch?</span><select class="inp" id="mMarket">${ms.map(opt).join('')}</select></label>
     <div class="row2">
-      <div class="fld"><span class="fl">Trigger when band is</span><div class="seg" id="mDir"><button type="button" data-v="below" class="on lo">Below</button><button type="button" data-v="above" class="hi">Above</button></div></div>
-      <label class="fld"><span class="fl">Percentile <em id="mPctV">P25</em></span><input type="range" id="mPct" min="1" max="99" value="25"></label>
+      <div class="fld"><span class="fl">What should it do?</span><div class="seg" id="mAction"><button type="button" data-v="enter" class="on">Buy</button><button type="button" data-v="exit">Sell what I hold</button></div></div>
+      <div class="fld"><span class="fl">When?</span><div class="seg" id="mDir"><button type="button" data-v="below" class="on lo">When it's cheap</button><button type="button" data-v="above" class="hi">When it's pricey</button></div></div>
     </div>
+    <label class="fld"><span class="fl">How cheap or pricey? <em id="mPctV"></em></span><input type="range" id="mPct" min="1" max="99" value="25"></label>
     <div class="row2">
-      <div class="fld"><span class="fl">Action</span><div class="seg" id="mAction"><button type="button" data-v="enter" class="on">Enter YT</button><button type="button" data-v="exit">Exit YT</button></div></div>
-      <label class="fld"><span class="fl">Size</span><span class="money"><input class="inp" id="mSize" inputmode="decimal" value="100"></span></label>
+      <label class="fld"><span class="fl">Amount</span><span class="money"><input class="inp" id="mSize" inputmode="decimal" value="100"></span></label>
+      <div class="fld"><span class="fl">With</span><div class="seg" id="mMode"><button type="button" data-v="paper" class="on">Practice money</button><button type="button" data-v="approve">Real, I approve</button></div></div>
     </div>
-    <div class="fld"><span class="fl">Mode</span><div class="seg" id="mMode"><button type="button" data-v="paper" class="on">Paper (fully autonomous)</button><button type="button" data-v="approve">One-tap approve</button></div></div>
-    <p class="help" id="mModeHelp">Paper: your agent trades $1,000 of paper money on its own at Pendle's live prices, only when SERV Reasoning confirms.</p>
+    <div class="rule-say" id="mSay"></div>
     <div class="err-line hidden" id="mErr"></div>
     <div><button class="btn primary sm" type="button" id="myRuleCreate">Arm this rule</button></div>
   </div></div>`;
+}
+function updateRuleSay() {
+  const m = $('#mMarket') && state.byId.get($('#mMarket').value);
+  if (!m) return;
+  const dir = segVal($('#mDir')), pct = Number($('#mPct').value), act = segVal($('#mAction')), mode = segVal($('#mMode')), size = num($('#mSize').value) || 0;
+  const span = Math.min(90, m.band.days);
+  const cond = dir === 'below' ? `cheaper than ${100 - pct}% of its last ${span} days` : `pricier than ${pct}% of its last ${span} days`;
+  $('#mPctV').textContent = dir === 'below' ? `cheaper than ${100 - pct}% of days` : `pricier than ${pct}% of days`;
+  const now = dir === 'below' ? m.band.percentile <= pct : m.band.percentile >= pct;
+  const what = act === 'enter' ? `buy $${size} of YT-${m.name}` : `sell your YT-${m.name}`;
+  $('#mSay').innerHTML = `Your agent will <b>${esc(what)}</b> when it is <b>${cond}</b>${mode === 'approve' ? ', then send you the real trade to approve in your wallet (Robinhood Chain only)' : ', with practice money'}. ${now ? '<span style="color:var(--lime)">It already is right now, so it acts on its next check.</span>' : `Right now it isn't (${esc(plainBand(m).toLowerCase().replace(/\.$/, ''))}), so it waits.`} SERV Reasoning has to agree first.`;
 }
 
 function myEventHtml(e) {
@@ -952,9 +1066,9 @@ function renderMy() {
     state.walletList = list;
     root.innerHTML = `<div class="card agent-hero" style="margin-top:14px">
       <div class="mascot sleep"><img src="/art/mascot.svg" alt=""><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div>
-      <div><h2>Your own BANDIT agent</h2><p class="muted" style="margin:8px 0 14px;max-width:560px">Sign in with any wallet and get a personal agent with <b style="color:var(--text)">$1,000 of paper money</b>. Arm rules on any Pendle YT and it trades on its own, with real SERV Reasoning decisions and live prices. Switch a rule to one-tap approve and it asks you to sign real trades on Robinhood Chain from your own wallet.</p>
-        ${list.length ? `<div class="wallets" style="max-width:420px">${list.map((p, i) => `<button class="wallet-btn" data-mywallet="${i}">${p.info.icon ? `<img src="${esc(p.info.icon)}" alt="">` : '<span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim);color:var(--lime)">◆</span>'}Sign in with ${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout" style="max-width:560px"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask to create your agent. Everything else on BANDIT works without one.</div></div>'}
-        <p class="help" style="margin-top:10px">Signing in is a free message signature: no gas, no funds, no approvals.</p></div><div></div></div>
+      <div><h2>Get your own BANDIT agent</h2><p class="muted" style="margin:8px 0 14px;max-width:560px">It watches the YTs you pick and buys or sells on simple rules like "buy $100 when it gets cheap". You start with <b style="color:var(--text)">$1,000 of practice money</b> and live prices, and SERV Reasoning explains every move. When you're ready, it can prepare real trades for you to approve in your own wallet.</p>
+        ${list.length ? `<div class="wallets" style="max-width:420px">${list.map((p, i) => `<button class="wallet-btn" data-mywallet="${i}">${p.info.icon ? `<img src="${esc(p.info.icon)}" alt="">` : '<span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--lime-dim);color:var(--lime)">◆</span>'}Create my free agent with ${esc(p.info.name)}</button>`).join('')}</div>` : '<div class="callout" style="max-width:560px"><span class="ic">◆</span><div><b>No browser wallet found.</b> Install Rabby or MetaMask to create your agent. Everything else on BANDIT works without one.</div></div>'}
+        <p class="help" style="margin-top:10px">Free: you sign a message. No gas, no funds, no approvals.</p></div><div></div></div>
       <div class="steps" style="margin-top:14px">
         <article class="card step"><span class="no">01</span><img src="/art/step-rule.svg" alt=""><h3>Arm a rule</h3><p>Enter a YT when it sits near the floor of its range, exit near the top. Any Pendle market, any chain.</p></article>
         <article class="card step"><span class="no">02</span><img src="/art/step-price.svg" alt=""><h3>SERV decides</h3><p>Every trigger goes to SERV Reasoning, which confirms or holds off with a written reason you can read.</p></article>
@@ -972,7 +1086,7 @@ function renderMy() {
     <div class="mascot sleep" id="mascot"><img src="/art/mascot.svg" alt="Your BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div>
     <div>
       <h2>Your BANDIT agent</h2>
-      <div class="state"><span class="state-pill dry"><i></i>Paper mode · $${p.startUsd.toLocaleString('en-US')} start</span><span class="badge none plain">${esc(shortAddr(st.address))}</span>${st.telegram.linked ? '<span class="badge confirmed">Telegram linked</span>' : ''}</div>
+      <div class="state"><span class="state-pill dry"><i></i>Practice money · started with $${p.startUsd.toLocaleString('en-US')}</span><span class="badge none plain">${esc(shortAddr(st.address))}</span>${st.telegram.linked ? '<span class="badge confirmed">Telegram linked</span>' : ''}</div>
       <div class="agent-stats">
         <div class="stat"><div class="v">$${Number(p.totalUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div><div class="k">Portfolio value</div></div>
         <div class="stat"><div class="v" style="color:${pnlColor}">${p.pnlUsd >= 0 ? '+' : ''}$${Math.abs(p.pnlUsd).toFixed(2)}</div><div class="k">P&amp;L (${p.pnlPct >= 0 ? '+' : ''}${p.pnlPct}%)</div></div>
@@ -981,22 +1095,23 @@ function renderMy() {
       </div>
     </div>
     <div class="hero-acts" style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn primary" id="myRun">Run my agent <span class="arr">→</span></button>
+      <button class="btn primary" id="myRun">Wake my agent <span class="arr">→</span></button>
       ${st.telegram.linked ? '' : `<button class="btn tg sm" id="myTg" ${st.telegram.bot ? '' : 'disabled'}>Connect Telegram</button>`}
       <button class="btn soft xs" id="mySignOut">Sign out</button>
     </div>
   </div>
+  ${!st.rules.length && firstMovePick() ? (() => { const f = firstMovePick(); return `<div class="card first-move"><img src="/art/mascot.svg" alt=""><div><span class="eyebrow">Your first move</span><h3>Let your agent watch YT-${esc(f.name)}</h3><p>${esc(plainBand(f))} If it gets back to its ${Math.min(90, f.band.days)}-day high it would be worth ${upPct(f.range.toHigh)}, and it has ${f.daysToMaturity} days to get there. A good first thing to watch.</p><div class="acts-row"><button class="btn primary" data-quick="${esc(f.id)}">Watch it: buy $100 when it's cheap <span class="arr">→</span></button><button class="btn soft sm" id="myCustom">I'll build my own rule</button></div><p class="help">Practice money only. Your agent checks every 10 minutes, and SERV Reasoning has to agree before it buys.</p></div></div>`; })() : ''}
   ${st.approvals.length ? `<div class="card panel" style="margin-top:14px;border-color:rgba(200,242,90,.35)"><h3>Waiting for your signature</h3><p class="sub">SERV Reasoning confirmed these on Robinhood Chain. Nothing moves until you sign in your own wallet.</p><div class="rules">${st.approvals.map(a => `<div class="rule"><span class="ico">✍</span><div><div class="d">Enter $${a.usd} of ${esc(a.name)}</div><div class="r">${clean(a.reason)}</div></div><div class="rule-acts"><button class="btn primary xs" data-approve="${esc(a.id)}">Review and sign</button></div></div>`).join('')}</div></div>` : ''}
   <div class="agent-grid">
     <div>
       <div class="card live-card">
         <h3>Agent Live <span class="serv-badge"><span class="sd">S</span>Every decision by <b>SERV Reasoning</b></span></h3>
-        <p class="sub">Your agent's runs, step by step. It wakes every 10 minutes on its own; Run my agent wakes it now.</p>
+        <p class="sub">Watch your agent think, step by step. It wakes every 10 minutes on its own, or right now with Wake my agent.</p>
         ${pipelineHtml()}
         <div class="live-buddy"><div class="buddy sleep" id="buddy"><img src="/art/mascot.svg" alt="BANDIT"><div class="zzz"><span>z</span><span>z</span><span>Z</span></div></div><div class="bubble" id="bubble">${active.length ? 'Asleep. I check your rules every 10 minutes.' : 'Arm a rule below and I will start watching.'}</div></div>
         <div class="mkt-strip" id="mktStrip"></div>
-        <div class="console" id="console"><div class="empty">No runs yet. Arm a rule, then press Run my agent.</div></div>
-        <div class="live-actions"><button class="btn primary sm" id="myRun2">Run my agent</button><button class="btn soft sm" id="myReplay" ${st.lastRun && st.lastRun.steps && st.lastRun.steps.length ? '' : 'disabled'}>Replay last run</button><span class="when">${st.lastRun ? `Last run ${ago(st.lastRun.at)} · ${esc(st.lastRun.source)}` : ''}</span></div>
+        <div class="console" id="console"><div class="empty">No runs yet. Arm a rule, then press Wake my agent.</div></div>
+        <div class="live-actions"><button class="btn primary sm" id="myRun2">Wake my agent</button><button class="btn soft sm" id="myReplay" ${st.lastRun && st.lastRun.steps && st.lastRun.steps.length ? '' : 'disabled'}>Replay last run</button><span class="when">${st.lastRun ? `Last run ${ago(st.lastRun.at)} · ${esc(st.lastRun.source)}` : ''}</span></div>
       </div>
       <div class="card panel" style="margin-top:14px">
         <h3>My rules</h3>
@@ -1018,9 +1133,10 @@ function renderMy() {
 
 function bindMyBuilder() {
   if (!$('#myRuleForm')) return;
-  bindSeg($('#mDir')); bindSeg($('#mAction'));
-  bindSeg($('#mMode'), v => { $('#mModeHelp').textContent = v === 'approve' ? 'One-tap approve: when your rule fires and SERV Reasoning confirms, you get a link to review and sign the real trade in your own wallet. Robinhood Chain markets only.' : "Paper: your agent trades $1,000 of paper money on its own at Pendle's live prices, only when SERV Reasoning confirms."; });
-  $('#mPct').addEventListener('input', e => { $('#mPctV').textContent = `P${e.target.value}`; });
+  ['#mDir', '#mAction', '#mMode'].forEach(sel => bindSeg($(sel), updateRuleSay));
+  ['#mPct', '#mSize'].forEach(sel => $(sel).addEventListener('input', updateRuleSay));
+  $('#mMarket').addEventListener('change', updateRuleSay);
+  updateRuleSay();
 }
 
 async function createMyRule() {
@@ -1066,7 +1182,11 @@ function handleMyClick(e) {
   if ((el = q('[data-approve]'))) { const a = state.meStatus.approvals.find(x => x.id === el.dataset.approve); if (a) { state.trade.size = a.usd; openTrade(a.marketId); } return true; }
   if (q('#myTg')) { meApi('telegram-link').then(j => { window.open(j.url, '_blank', 'noopener'); toast('Press Start in Telegram to link your agent.', 'ok'); }).catch(err => toast(err.message, 'err')); return true; }
   if (q('#myReset')) { if (confirm('Reset your paper portfolio to $1,000?')) meApi('reset').then(() => { state.meSig = ''; loadMe(); }).catch(err => toast(err.message, 'err')); return true; }
-  if (q('#mySignOut')) { state.me = null; state.meStatus = null; store.set('bandit.me', null); renderMy(); return true; }
+  if (q('#mySignOut')) { state.me = null; state.meStatus = null; store.set('bandit.me', null); updateWalletBtn(); renderMy(); return true; }
+  if ((el = q('[data-quick]'))) { quickFirstRule(el.dataset.quick); return true; }
+  if (q('#myCustom')) { $('#myBuilder')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
+  if (q('#obNext')) { state.welcome = Math.min(ONBOARD.length - 1, state.welcome + 1); renderWelcome(); return true; }
+  if (q('#obBack')) { state.welcome = Math.max(0, state.welcome - 1); renderWelcome(); return true; }
   return false;
 }
 
@@ -1091,8 +1211,8 @@ document.addEventListener('click', e => {
   if (q('#ownerSave')) return saveOwner();
   if (q('#copyAddr')) { navigator.clipboard && navigator.clipboard.writeText(state.agent.agent.address).then(() => toast('Address copied.', 'ok')); return; }
   if (q('#addChain')) { const p = state.wallet.provider || window.ethereum; if (!p) return toast('Open BANDIT in a browser with a wallet to add Robinhood Chain.', 'err'); ensureChain(p).then(() => toast('Robinhood Chain is in your wallet.', 'ok')).catch(err => toast(err.message, 'err')); return; }
-  if (q('#walletBtn')) return openTrade();
-  if (q('#walletOff')) { state.wallet = { provider: null, info: null, address: null }; state.trade.review = null; updateWalletBtn(); renderTrade(); return; }
+  if (q('#walletBtn')) { if (state.me) { location.hash = '#/my'; return; } return openWelcome(); }
+  if (q('#walletOff')) { state.wallet = { provider: null, info: null, address: null }; store.set('bandit.wallet', null); state.trade.review = null; updateWalletBtn(); renderTrade(); return; }
   if (q('#tReview')) return reviewTrade();
   if (q('#tSign')) return signTrade();
   if (q('#alertCreate')) return createAlert();
@@ -1117,6 +1237,7 @@ $('#askForm').addEventListener('submit', ask);
 $('#askSize').addEventListener('blur', e => { const n = num(e.target.value); if (n > 0) e.target.value = n.toLocaleString('en-US', { maximumFractionDigits: 2 }); });
 skeletons();
 route();
+updateWalletBtn();
 loadMarkets();
 setInterval(() => { if (!document.hidden) loadMarkets(); }, 5 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && (state.route === 'agent' || state.route === 'receipts')) loadAgent(); });
